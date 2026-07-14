@@ -1,0 +1,113 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum CaseStatus {
+  hypothetical
+  real_in_progress
+  real_closed
+}
+
+enum PrincipleStatus {
+  candidate
+  pattern
+  principle
+  explicit_stated
+}
+
+enum PatternStatus {
+  single_case
+  two_case
+  tactical
+  candidate
+}
+
+enum OpenQuestionStatus {
+  open
+  resolved
+}
+
+model DecisionEngineBranch {
+  id          String @id
+  name        String
+  appliesWhen String
+  blocks      Json
+  cases       Case[]
+}
+
+model Case {
+  id             String     @id
+  title          String
+  domain         String
+  status         CaseStatus
+  branchId       String?
+  branch         DecisionEngineBranch? @relation(fields: [branchId], references: [id])
+  facts          String     @default("")
+  questionsAsked Json       @default("[]")
+  decisionTree   String     @default("")
+  outcome        String     @default("")
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  confirmsPrinciples CaseConfirmsPrinciple[]
+  confirmsPatterns   CaseConfirmsPattern[]
+  openQuestions      OpenQuestion[]
+}
+
+model Question {
+  id            String @id
+  text          String
+  domainTags    Json   @default("[]")
+  sourceCaseIds Json   @default("[]")
+}
+
+model Principle {
+  id                      String          @id
+  title                   String
+  statement               String
+  status                  PrincipleStatus
+  personalCalibrationNote String?
+
+  confirmedByCases CaseConfirmsPrinciple[]
+}
+
+model Pattern {
+  id        String        @id
+  title     String
+  statement String
+  status    PatternStatus
+
+  confirmedByCases CaseConfirmsPattern[]
+}
+
+model CaseConfirmsPrinciple {
+  caseId      String
+  principleId String
+  case        Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  principle   Principle @relation(fields: [principleId], references: [id], onDelete: Cascade)
+
+  @@id([caseId, principleId])
+}
+
+model CaseConfirmsPattern {
+  caseId    String
+  patternId String
+  case      Case    @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  pattern   Pattern @relation(fields: [patternId], references: [id], onDelete: Cascade)
+
+  @@id([caseId, patternId])
+}
+
+model OpenQuestion {
+  id             String             @id
+  text           String
+  relatedCaseId  String?
+  relatedCase    Case?              @relation(fields: [relatedCaseId], references: [id])
+  status         OpenQuestionStatus @default(open)
+  resolutionNote String?
+}

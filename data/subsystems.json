@@ -1,0 +1,72 @@
+[
+  {
+    "id": "sub_travel",
+    "key": "travel",
+    "name": "Travel",
+    "description": "Перелёты, отели, отмены и перебронирования поездок.",
+    "ownerRoleKey": "travel_manager"
+  },
+  {
+    "id": "sub_residence",
+    "key": "residence",
+    "name": "Residence / House",
+    "description": "Дом, резиденции, бытовая инфраструктура семьи.",
+    "ownerRoleKey": "house_manager"
+  },
+  {
+    "id": "sub_legal",
+    "key": "legal",
+    "name": "Legal",
+    "description": "Юридические вопросы, договоры, претензии, регуляторика.",
+    "ownerRoleKey": "legal_counsel"
+  },
+  {
+    "id": "sub_staff",
+    "key": "staff",
+    "name": "Staff / HR",
+    "description": "Персонал, найм, кадровые и бытовые вопросы сотрудников.",
+    "ownerRoleKey": "hr_manager"
+  },
+  {
+    "id": "sub_banking",
+    "key": "banking",
+    "name": "Banking Operations",
+    "description": "Платежи, счета, банковские операции.",
+    "ownerRoleKey": "banking_ops"
+  },
+  {
+    "id": "sub_security",
+    "key": "security",
+    "name": "Security",
+    "description": "Безопасность, доступ, физическая защита.",
+    "ownerRoleKey": "security_lead"
+  },
+  {
+    "id": "sub_insurance",
+    "key": "insurance",
+    "name": "Insurance",
+    "description": "Страховые полисы, покрытие, урегулирование.",
+    "ownerRoleKey": "insurance_coordinator"
+  },
+  {
+    "id": "sub_education",
+    "key": "education",
+    "name": "Education",
+    "description": "Образование детей, школы, репетиторы.",
+    "ownerRoleKey": "education_coordinator"
+  },
+  {
+    "id": "sub_investment_property",
+    "key": "investment_property",
+    "name": "Investment Property",
+    "description": "Инвестиционная недвижимость, сделки, реестры.",
+    "ownerRoleKey": "property_manager"
+  },
+  {
+    "id": "sub_executive_schedule",
+    "key": "executive_schedule",
+    "name": "Executive Schedule",
+    "description": "Календарь принципала, секретарская поддержка.",
+    "ownerRoleKey": "executive_assistant"
+  }
+]

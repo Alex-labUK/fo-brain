@@ -1,6 +1,7 @@
 import type { CaseStatus } from "@prisma/client";
 import { CaseFilters } from "@/components/CaseFilters";
 import { CaseList } from "@/components/CaseList";
+import { OutcomeList } from "@/components/OutcomeList";
 import { PrincipleStatusBadge } from "@/components/StatusBadge";
 import { ensureSeeded } from "@/lib/ensure-seeded";
 import { principleStatusLabels } from "@/lib/labels";
@@ -26,7 +27,7 @@ export default async function Home({ searchParams }: PageProps) {
     ...(statusFilter ? { status: statusFilter } : {}),
   };
 
-  const [cases, principleCounts, openQuestions, allDomains] = await Promise.all([
+  const [cases, principleCounts, openQuestions, allDomains, activeOutcomes] = await Promise.all([
     prisma.case.findMany({
       where: caseWhere,
       include: {
@@ -53,6 +54,14 @@ export default async function Home({ searchParams }: PageProps) {
       distinct: ["domain"],
       orderBy: { domain: "asc" },
     }),
+    prisma.outcome.findMany({
+      where: { stage: "active" },
+      include: {
+        _count: { select: { activations: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+    }),
   ]);
 
   const domains = allDomains.map((item) => item.domain);
@@ -78,6 +87,18 @@ export default async function Home({ searchParams }: PageProps) {
             <span className="text-sm text-zinc-500">Всего</span>
             <span className="text-lg font-semibold text-zinc-900">{totalPrinciples}</span>
           </div>
+        </div>
+      </section>
+
+      <section className="mt-10">
+        <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
+          <div className="border-b border-zinc-100 px-4 py-4">
+            <h2 className="font-semibold text-zinc-900">Активные outcomes</h2>
+            <p className="mt-1 text-sm text-zinc-500">
+              Оркестрация запросов — desired outcome и activations
+            </p>
+          </div>
+          <OutcomeList outcomes={activeOutcomes} />
         </div>
       </section>
 

@@ -32,6 +32,57 @@ enum OpenQuestionStatus {
   resolved
 }
 
+enum OutcomeStage {
+  draft
+  active
+  cancelled
+}
+
+enum ActivationStatus {
+  proposed
+  confirmed
+  excluded
+}
+
+model Outcome {
+  id               String       @id
+  statement        String
+  successCondition String?
+  requestFacts     String       @default("")
+  headFocus        String?
+  stage            OutcomeStage @default(draft)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  activations Activation[]
+  cases       Case[]
+}
+
+model Subsystem {
+  id           String @id
+  key          String @unique
+  name         String
+  description  String?
+  ownerRoleKey String?
+
+  activations Activation[]
+}
+
+model Activation {
+  id               String           @id
+  outcomeId        String
+  subsystemId      String
+  context          String           @default("")
+  expectedFeedback String           @default("")
+  status           ActivationStatus @default(proposed)
+  excludeReason    String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  outcome   Outcome   @relation(fields: [outcomeId], references: [id], onDelete: Cascade)
+  subsystem Subsystem @relation(fields: [subsystemId], references: [id], onDelete: Cascade)
+}
+
 model DecisionEngineBranch {
   id          String @id
   name        String
@@ -47,10 +98,12 @@ model Case {
   status         CaseStatus
   branchId       String?
   branch         DecisionEngineBranch? @relation(fields: [branchId], references: [id])
+  outcomeId      String?
+  outcome        Outcome?   @relation(fields: [outcomeId], references: [id])
   facts          String     @default("")
   questionsAsked Json       @default("[]")
   decisionTree   String     @default("")
-  outcome        String     @default("")
+  recordedResult String     @default("")
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 

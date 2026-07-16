@@ -19,6 +19,7 @@ export default async function CaseDetailPage({ params }: PageProps) {
     where: { id },
     include: {
       branch: true,
+      outcome: { select: { id: true, statement: true } },
       confirmsPrinciples: {
         include: { principle: true },
         orderBy: { principleId: "asc" },
@@ -47,6 +48,15 @@ export default async function CaseDetailPage({ params }: PageProps) {
           </h1>
           <p className="mt-1 text-sm text-zinc-500">
             {caseItem.id} · {formatDomain(caseItem.domain)}
+            {caseItem.outcome && (
+              <>
+                {" "}
+                ·{" "}
+                <Link href={`/outcomes/${caseItem.outcome.id}`} className="underline">
+                  outcome
+                </Link>
+              </>
+            )}
           </p>
         </div>
         <CaseStatusBadge status={caseItem.status} />
@@ -87,11 +97,11 @@ export default async function CaseDetailPage({ params }: PageProps) {
           </div>
         )}
 
-        {caseItem.outcome && (
+        {caseItem.recordedResult && (
           <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
             <h2 className="text-sm font-medium uppercase tracking-wide text-zinc-500">Итог</h2>
             <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-zinc-700">
-              {caseItem.outcome}
+              {caseItem.recordedResult}
             </p>
           </div>
         )}

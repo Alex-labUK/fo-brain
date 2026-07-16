@@ -17,6 +17,10 @@ type BranchOption = {
 type CaseWizardProps = {
   branches: BranchOption[];
   existingDomains: string[];
+  outcomeId?: string;
+  prefillTitle?: string;
+  prefillFacts?: string;
+  cancelHref?: string;
 };
 
 type FormState = {
@@ -27,24 +31,33 @@ type FormState = {
   status: CaseStatus;
   branchId: string;
   decisionTree: string;
-  outcome: string;
+  recordedResult: string;
 };
 
-const initialState: FormState = {
-  title: "",
-  facts: "",
-  domainPreset: knownDomains[0] ?? "",
-  customDomain: "",
-  status: "hypothetical",
-  branchId: "",
-  decisionTree: "",
-  outcome: "",
-};
+function buildInitialState(prefillTitle?: string, prefillFacts?: string): FormState {
+  return {
+    title: prefillTitle ?? "",
+    facts: prefillFacts ?? "",
+    domainPreset: knownDomains[0] ?? "",
+    customDomain: "",
+    status: "hypothetical",
+    branchId: "",
+    decisionTree: "",
+    recordedResult: "",
+  };
+}
 
-export function CaseWizard({ branches, existingDomains }: CaseWizardProps) {
+export function CaseWizard({
+  branches,
+  existingDomains,
+  outcomeId,
+  prefillTitle,
+  prefillFacts,
+  cancelHref = "/",
+}: CaseWizardProps) {
   const router = useRouter();
   const [step, setStep] = useState(0);
-  const [form, setForm] = useState<FormState>(initialState);
+  const [form, setForm] = useState<FormState>(() => buildInitialState(prefillTitle, prefillFacts));
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -105,7 +118,8 @@ export function CaseWizard({ branches, existingDomains }: CaseWizardProps) {
           status: form.status,
           branchId: form.branchId || null,
           decisionTree: form.decisionTree,
-          outcome: form.outcome,
+          recordedResult: form.recordedResult,
+          outcomeId: outcomeId ?? null,
         });
         router.push(`/cases/${id}`);
       } catch (err) {
@@ -278,8 +292,8 @@ export function CaseWizard({ branches, existingDomains }: CaseWizardProps) {
             </div>
 
             <textarea
-              value={form.outcome}
-              onChange={(e) => updateField("outcome", e.target.value)}
+              value={form.recordedResult}
+              onChange={(e) => updateField("recordedResult", e.target.value)}
               rows={8}
               placeholder="Принятое решение, текущий статус, следующие шаги..."
               className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm leading-relaxed"
@@ -328,7 +342,7 @@ export function CaseWizard({ branches, existingDomains }: CaseWizardProps) {
             </button>
           ) : (
             <Link
-              href="/"
+              href={cancelHref}
               className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
             >
               Отмена

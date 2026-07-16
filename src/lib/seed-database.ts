@@ -34,13 +34,52 @@ type SeedData = {
   openQuestions: string[];
 };
 
+type SubsystemSeedItem = {
+  id: string;
+  key: string;
+  name: string;
+  description?: string;
+  ownerRoleKey?: string;
+};
+
 function loadSeedData(): SeedData {
   const seedPath = join(process.cwd(), "seed-data.json");
   const raw = readFileSync(seedPath, "utf-8");
   return JSON.parse(raw) as SeedData;
 }
 
+function loadSubsystems(): SubsystemSeedItem[] {
+  const seedPath = join(process.cwd(), "data", "subsystems.json");
+  const raw = readFileSync(seedPath, "utf-8");
+  return JSON.parse(raw) as SubsystemSeedItem[];
+}
+
+export async function seedSubsystems(prisma: PrismaClient): Promise<number> {
+  const count = await prisma.subsystem.count();
+  if (count > 0) {
+    return 0;
+  }
+
+  const subsystems = loadSubsystems();
+  for (const subsystem of subsystems) {
+    await prisma.subsystem.create({
+      data: {
+        id: subsystem.id,
+        key: subsystem.key,
+        name: subsystem.name,
+        description: subsystem.description ?? null,
+        ownerRoleKey: subsystem.ownerRoleKey ?? null,
+      },
+    });
+  }
+
+  console.log(`  ✓ ${subsystems.length} subsystems`);
+  return subsystems.length;
+}
+
 export async function seedDatabase(prisma: PrismaClient): Promise<boolean> {
+  await seedSubsystems(prisma);
+
   const branchCount = await prisma.decisionEngineBranch.count();
   if (branchCount > 0) {
     return false;

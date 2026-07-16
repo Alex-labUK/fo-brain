@@ -12,7 +12,8 @@ export type CreateCaseInput = {
   status: CaseStatus;
   branchId: string | null;
   decisionTree: string;
-  outcome: string;
+  recordedResult: string;
+  outcomeId?: string | null;
 };
 
 export async function createCase(input: CreateCaseInput): Promise<{ id: string }> {
@@ -38,13 +39,17 @@ export async function createCase(input: CreateCaseInput): Promise<{ id: string }
       status: input.status,
       branchId: input.branchId || null,
       decisionTree: input.decisionTree.trim(),
-      outcome: input.outcome.trim(),
+      recordedResult: input.recordedResult.trim(),
+      outcomeId: input.outcomeId || null,
       questionsAsked: [],
     },
   });
 
   revalidatePath("/");
   revalidatePath(`/cases/${id}`);
+  if (input.outcomeId) {
+    revalidatePath(`/outcomes/${input.outcomeId}`);
+  }
 
   return { id };
 }

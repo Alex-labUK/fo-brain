@@ -17,6 +17,7 @@ type ActivationRow = {
   subsystemId: string;
   subsystemName: string;
   ownerRoleKey: string | null;
+  reasonForActivation: string;
   context: string;
   expectedFeedback: string;
   status: ActivationRowStatus;
@@ -89,7 +90,8 @@ export function OrchestrationWizard({ subsystems }: OrchestrationWizardProps) {
         subsystemId: proposal.subsystemId,
         subsystemName: proposal.subsystemName,
         ownerRoleKey: proposal.ownerRoleKey,
-        context: proposal.context,
+        reasonForActivation: proposal.reasonForActivation,
+        context: proposal.roleRelevantContext,
         expectedFeedback: proposal.expectedFeedback,
         status: "pending",
         excludeReason: "",
@@ -126,7 +128,8 @@ export function OrchestrationWizard({ subsystems }: OrchestrationWizardProps) {
         subsystemId: subsystem.id,
         subsystemName: subsystem.name,
         ownerRoleKey: subsystem.ownerRoleKey,
-        context: intake.requestFacts.trim(),
+        reasonForActivation: "",
+        context: "",
         expectedFeedback: "Подтверждённый результат или исключение, без детального плана задач.",
         status: "pending",
         excludeReason: "",
@@ -341,8 +344,18 @@ export function OrchestrationWizard({ subsystems }: OrchestrationWizardProps) {
 
                   {row.status !== "excluded" && (
                     <>
+                      {row.reasonForActivation && (
+                        <p className="mt-4 text-sm text-zinc-600">
+                          <span className="text-xs font-medium text-zinc-500">
+                            Reason for activation
+                          </span>
+                          <span className="mt-1 block">{row.reasonForActivation}</span>
+                        </p>
+                      )}
                       <label className="mt-4 block space-y-1">
-                        <span className="text-xs font-medium text-zinc-500">Minimum context</span>
+                        <span className="text-xs font-medium text-zinc-500">
+                          Role-relevant context
+                        </span>
                         <textarea
                           value={row.context}
                           onChange={(e) => updateRow(row.clientKey, { context: e.target.value })}

@@ -1,5 +1,19 @@
 [
   {
+    "id": "sub_family",
+    "key": "family",
+    "name": "Family",
+    "description": "Немедленная поддержка семьи, благополучие детей и семейная координация.",
+    "ownerRoleKey": "family_coordinator"
+  },
+  {
+    "id": "sub_health",
+    "key": "health",
+    "name": "Health",
+    "description": "Медицинская помощь, координация лечения и health-related assistance.",
+    "ownerRoleKey": "health_coordinator"
+  },
+  {
     "id": "sub_travel",
     "key": "travel",
     "name": "Travel",
@@ -7,11 +21,25 @@
     "ownerRoleKey": "travel_manager"
   },
   {
+    "id": "sub_household_operations",
+    "key": "household_operations",
+    "name": "Household Operations",
+    "description": "Ежедневная готовность дома и расписания персонала (operational readiness).",
+    "ownerRoleKey": "household_ops_manager"
+  },
+  {
     "id": "sub_residence",
     "key": "residence",
     "name": "Residence / House",
-    "description": "Дом, резиденции, бытовая инфраструктура семьи.",
+    "description": "Недвижимость и инфраструктура резиденций — ремонт, здание, инженерные системы.",
     "ownerRoleKey": "house_manager"
+  },
+  {
+    "id": "sub_staff",
+    "key": "staff",
+    "name": "Staff / HR",
+    "description": "Персонал, найм, увольнение и кадровые/employment вопросы.",
+    "ownerRoleKey": "hr_manager"
   },
   {
     "id": "sub_legal",
@@ -19,13 +47,6 @@
     "name": "Legal",
     "description": "Юридические вопросы, договоры, претензии, регуляторика.",
     "ownerRoleKey": "legal_counsel"
-  },
-  {
-    "id": "sub_staff",
-    "key": "staff",
-    "name": "Staff / HR",
-    "description": "Персонал, найм, кадровые и бытовые вопросы сотрудников.",
-    "ownerRoleKey": "hr_manager"
   },
   {
     "id": "sub_banking",

@@ -15,6 +15,7 @@
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
     "db:setup": "prisma migrate dev && tsx prisma/seed.ts",
+    "test:proposals": "tsx src/core/orchestration/draft-subsystem-proposals.test.ts",
     "postinstall": "prisma generate"
   },
   "prisma": {

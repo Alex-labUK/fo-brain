@@ -55,13 +55,15 @@ function loadSubsystems(): SubsystemSeedItem[] {
 }
 
 export async function seedSubsystems(prisma: PrismaClient): Promise<number> {
-  const count = await prisma.subsystem.count();
-  if (count > 0) {
-    return 0;
-  }
-
   const subsystems = loadSubsystems();
+  let created = 0;
+
   for (const subsystem of subsystems) {
+    const existing = await prisma.subsystem.findUnique({
+      where: { key: subsystem.key },
+    });
+    if (existing) continue;
+
     await prisma.subsystem.create({
       data: {
         id: subsystem.id,
@@ -71,10 +73,14 @@ export async function seedSubsystems(prisma: PrismaClient): Promise<number> {
         ownerRoleKey: subsystem.ownerRoleKey ?? null,
       },
     });
+    created += 1;
   }
 
-  console.log(`  ✓ ${subsystems.length} subsystems`);
-  return subsystems.length;
+  if (created > 0) {
+    console.log(`  ✓ ${created} subsystems`);
+  }
+
+  return created;
 }
 
 export async function seedDatabase(prisma: PrismaClient): Promise<boolean> {

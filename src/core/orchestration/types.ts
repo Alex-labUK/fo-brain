@@ -13,7 +13,9 @@ export type DraftSubsystemProposal = {
   subsystemKey: string;
   subsystemName: string;
   ownerRoleKey: string | null;
-  context: string;
+  /** Draft-only explanation — not persisted to Prisma in Phase 1.1. */
+  reasonForActivation: string;
+  roleRelevantContext: string;
   expectedFeedback: string;
   /** Always true in Phase 1 — keyword rules are draft suggestions only. */
   isDraftSuggestion: true;

@@ -1,36 +1,97 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# FO Brain
 
-## Getting Started
+**FO Brain** is the first implementation of a **Decision Operating
+System (DOS)**.
 
-First, run the development server:
+It is designed to support operational decision-making in complex
+organisations by maintaining a continuously evolving Operational
+Picture.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+The platform augments human judgement.
+
+It never replaces it.
+
+------------------------------------------------------------------------
+
+# Start Here
+
+Read the documents in this order:
+
+1.  VISION.md
+2.  PLATFORM.md
+3.  PRINCIPLES.md
+4.  GLOSSARY.md
+
+After that, continue into the `docs/` directory for detailed
+specifications.
+
+------------------------------------------------------------------------
+
+# Repository Structure
+
+``` text
+README.md        Project entry point
+VISION.md        Why the platform exists
+PLATFORM.md      High-level platform architecture
+PRINCIPLES.md    Architectural rules
+GLOSSARY.md      Common terminology
+ROADMAP.md       Future evolution
+
+docs/
+    architecture/
+    domain/
+    method/
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+------------------------------------------------------------------------
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+# Core Idea
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+The platform follows a simple reasoning model:
 
-## Learn More
+``` text
+Information
+      ↓
+Operational Picture
+      ↓
+Recommendations
+      ↓
+Human Decision
+      ↓
+Execution
+      ↓
+Learning
+```
 
-To learn more about Next.js, take a look at the following resources:
+Recommendations are always generated from the Operational Picture---not
+directly from incoming information.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+------------------------------------------------------------------------
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+# Principles
 
-## Deploy on Vercel
+-   Understanding before recommendation.
+-   AI supports; humans decide.
+-   Facts and assumptions remain distinct.
+-   Recommendations must be explainable.
+-   Learning improves future decisions.
+-   The reasoning model is domain-independent.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+------------------------------------------------------------------------
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+# Current Status
+
+The repository currently focuses on:
+
+-   domain modelling;
+-   reasoning methodology;
+-   platform architecture;
+-   documentation-first design.
+
+Implementation follows the specifications in this repository.
+
+------------------------------------------------------------------------
+
+# License
+
+License to be defined.

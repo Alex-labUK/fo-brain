@@ -1,121 +1,56 @@
 # Recommendation
 
-Version: 1.0
-Status: Approved Draft
-Owner: FO Brain
+Status: Draft v1
 
----
+## Purpose
 
-# Purpose
+A Recommendation is the Case Aggregate's current advised course of action.
 
-A Recommendation is the proposed course of action produced from the current
-Operational Picture.
+Only one Recommendation may be active at a time.
 
-It answers the question:
+## Structure
 
-"What should we do next?"
+- id
+- status
+- selectedOptionId
+- statement
+- rationale
+- intendedOutcome
+- supportingFactIds
+- supportingAssumptionIds
+- materialUnknownIds
+- materialRiskIds
+- dependencies
+- confidence
+- createdAt
+- createdBy
+- supersedesRecommendationId
 
-Recommendations help the Principal or operator make better decisions.
+## Status
 
-They are not decisions themselves.
+- `draft`
+- `active`
+- `superseded`
+- `withdrawn`
+- `accepted`
+- `rejected`
 
----
+## Rules
 
-# Definition
+1. Only one Recommendation may have status `active`.
+2. An active Recommendation must state the intended Outcome.
+3. Material Risks and Unknowns must remain visible.
+4. AI may propose a Recommendation.
+5. Only a validated Command may activate, revise, withdraw, accept, or reject it.
+6. Revising an active Recommendation creates a new version and supersedes the previous one.
+7. Recommendation history is immutable.
 
-A Recommendation is generated after evaluating:
+## Minimum Activation Requirements
 
-- Confirmed Facts
-- Unknowns
-- Assumptions
-- Outcome
-- Expert Assessments
-- Operational Constraints
-
-A Recommendation should always be explainable.
-
----
-
-# Lifecycle
-
-Draft
-    ↓
-Proposed
-    ↓
-Updated
-    ↓
-Accepted
-
-or
-
-Proposed
-    ↓
-Rejected
-
-or
-
-Proposed
-    ↓
-Withdrawn
-
----
-
-# Required Fields
-
-Every Recommendation contains:
-
-- Recommendation ID
-- Statement
-- Rationale
-- Status
-- Created At
-- Created By
-
----
-
-# Rationale
-
-Every Recommendation must explain:
-
-- Why this recommendation exists.
-- Which Facts support it.
-- Which Unknowns increase uncertainty.
-- Which Assumptions influence it.
-- Which Outcome it is intended to achieve.
-
----
-
-# Business Rules
-
-- Every Recommendation belongs to exactly one Operational Brief.
-- Recommendations are optional.
-- Multiple Recommendations may coexist.
-- Only one Recommendation may be marked as Primary.
-- Recommendations may change while analysis is in progress.
-- Recommendations do not bind the Principal.
-
----
-
-# Relationship to Other Objects
-
-Recommendation != Decision
-
-Recommendation != Outcome
-
-Recommendation != Task
-
-Recommendations are proposals intended to achieve the Outcome.
-
-The Principal Decision may accept, reject or modify a Recommendation.
-
----
-
-# Success Criteria
-
-A high-quality Recommendation is:
-
-- evidence-based
-- understandable
-- actionable
-- aligned with the Outcome
-- transparent about uncertainty
+- selected Option or explicit action;
+- rationale;
+- intended Outcome;
+- supporting evidence;
+- material Risks;
+- material Unknowns;
+- confidence.

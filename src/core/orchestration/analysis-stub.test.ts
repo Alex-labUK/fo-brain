@@ -37,9 +37,21 @@ assert(factCount === 5, `Must have exactly 5 critical facts, got ${factCount}`);
 
 const facts = leakAnalysis.sections[1].facts ?? [];
 assert(facts.length === 5, "Five flat facts");
-assert(facts.some((f) => f.includes("гарантия")), "Warranty fact included");
+assert(facts.some((f) => /гарант/i.test(f)), "Warranty applicability question included");
+assert(
+  facts.some((f) => /технич|причин/i.test(f)),
+  "Technical cause question included",
+);
 
 const assignments = leakAnalysis.sections[2].roleAssignments ?? [];
+assert(
+  assignments.some((a) => a.role === "Legal"),
+  "Legal role must be assigned",
+);
+assert(
+  assignments.some((a) => /house manager|technical/i.test(a.role)),
+  "House Manager or Technical role must be assigned",
+);
 assert(
   assignments.some((a) => a.role === "House Manager" && a.tasks[0].includes("дымохода")),
   "Chimney repair history",
@@ -55,9 +67,19 @@ assert(
 
 const scenarios = leakAnalysis.sections[3].scenarios ?? [];
 assert(scenarios.length <= 3, "Max 3 scenarios");
-assert(scenarios.some((s) => s.action.includes("предъявить требования подрядчику")), "Warranty scenario");
-assert(scenarios.some((s) => s.action.includes("коммерческий ремонт")), "Commercial scenario");
-assert(scenarios.some((s) => s.tone === "warning"), "Unknown-cause scenario");
+assert(
+  scenarios.some(
+    (s) =>
+      s.tone === "warning" &&
+      (/ответствен/i.test(s.action) || /договор/i.test(s.action)) &&
+      /технич|причин|дефект/i.test(s.action),
+  ),
+  "Must prohibit accepting responsibility before contract and technical cause check",
+);
+
+const leakText = JSON.stringify(leakAnalysis).toLowerCase();
+assert(leakText.includes("гарант"), "Warranty check in full analysis");
+assert(leakText.includes("технич"), "Technical cause in full analysis");
 
 const tripOnly = generateAnalysisStub(
   {

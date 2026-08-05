@@ -16,6 +16,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:setup": "prisma migrate dev && tsx prisma/seed.ts",
     "test:proposals": "tsx src/core/orchestration/draft-subsystem-proposals.test.ts",
+    "test:analysis": "tsx src/core/orchestration/analysis-stub.test.ts",
     "postinstall": "prisma generate"
   },
   "prisma": {
@@ -24,8 +25,10 @@
   "dependencies": {
     "@prisma/client": "^6.19.3",
     "next": "16.2.10",
+    "openai": "^7.3.0",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "server-only": "^0.0.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

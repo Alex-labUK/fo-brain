@@ -12,16 +12,16 @@ export function AppHeader() {
         </Link>
         <div className="flex items-center gap-3">
           <Link
-            href="/cases/new"
+            href="/"
             className="text-sm font-medium text-zinc-600 hover:text-zinc-900"
           >
-            Decision Engine
+            Дашборд
           </Link>
           <Link
-            href="/requests/new"
+            href="/analyze"
             className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700"
           >
-            Новый запрос
+            Анализировать
           </Link>
         </div>
       </div>

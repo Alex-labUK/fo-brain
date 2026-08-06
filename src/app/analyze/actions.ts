@@ -2,13 +2,14 @@
 
 import type { CaseStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
-import type { AnalysisInput, AnalysisResult } from "@/core/orchestration/analysis-core";
+import { randomUUID } from "crypto";
+import type { AnalysisInput, AnalysisResult, AnalysisRunResult } from "@/core/orchestration/analysis-core";
 import { SECTION_TITLES } from "@/core/orchestration/analysis-core";
 import { generateAnalysis } from "@/core/orchestration/analysis-generate";
 import { generateCaseId } from "@/lib/case-id";
 import { prisma } from "@/lib/prisma";
 
-export async function runCaseAnalysis(input: AnalysisInput): Promise<AnalysisResult> {
+export async function runCaseAnalysis(input: AnalysisInput): Promise<AnalysisRunResult> {
   return generateAnalysis(input);
 }
 
@@ -35,6 +36,14 @@ function buildRecordedResultFromAnalysis(analysis: AnalysisResult): string {
   return [outcome, fork].filter(Boolean).join(" ");
 }
 
+function buildInitialAssistantMessage(analysis: AnalysisResult): string {
+  const reply = analysis.reply?.trim();
+  if (reply) return reply;
+
+  const outcome = analysis.sections.find((section) => section.title === SECTION_TITLES[0])?.content;
+  return outcome?.trim() || "Разбор готов.";
+}
+
 export async function saveAnalysisAsCase(input: SaveAnalysisAsCaseInput): Promise<{ id: string }> {
   const title = input.title.trim();
   const domain = input.domain.trim();
@@ -48,6 +57,8 @@ export async function saveAnalysisAsCase(input: SaveAnalysisAsCaseInput): Promis
   }
 
   const id = await generateCaseId();
+  const userMessage = input.input.whatHappened.trim();
+  const assistantMessage = buildInitialAssistantMessage(input.analysisResult);
 
   await prisma.case.create({
     data: {
@@ -64,6 +75,12 @@ export async function saveAnalysisAsCase(input: SaveAnalysisAsCaseInput): Promis
       branchId: null,
       outcomeId: null,
       questionsAsked: [],
+      messages: {
+        create: [
+          { id: randomUUID(), role: "user", content: userMessage },
+          { id: randomUUID(), role: "assistant", content: assistantMessage },
+        ],
+      },
     },
   });
 

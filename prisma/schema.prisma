@@ -11,6 +11,7 @@ enum CaseStatus {
   hypothetical
   real_in_progress
   real_closed
+  cancelled
 }
 
 enum PrincipleStatus {
@@ -114,6 +115,16 @@ model Case {
   confirmsPrinciples CaseConfirmsPrinciple[]
   confirmsPatterns   CaseConfirmsPattern[]
   openQuestions      OpenQuestion[]
+  messages           CaseMessage[]
+}
+
+model CaseMessage {
+  id        String   @id
+  caseId    String
+  case      Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  role      String
+  content   String
+  createdAt DateTime @default(now())
 }
 
 model Question {
@@ -164,7 +175,7 @@ model OpenQuestion {
   id             String             @id
   text           String
   relatedCaseId  String?
-  relatedCase    Case?              @relation(fields: [relatedCaseId], references: [id])
+  relatedCase    Case?              @relation(fields: [relatedCaseId], references: [id], onDelete: SetNull)
   status         OpenQuestionStatus @default(open)
   resolutionNote String?
 }

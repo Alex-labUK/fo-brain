@@ -4,6 +4,7 @@ export const caseStatusLabels: Record<CaseStatus, string> = {
   hypothetical: "Гипотетический",
   real_in_progress: "Реальный, в процессе",
   real_closed: "Реальный, закрыт",
+  cancelled: "Отменён",
 };
 
 export const principleStatusLabels: Record<PrincipleStatus, string> = {
@@ -68,6 +69,8 @@ export function caseStatusBadgeClass(status: CaseStatus): string {
       return "bg-amber-100 text-amber-800";
     case "real_closed":
       return "bg-emerald-100 text-emerald-800";
+    case "cancelled":
+      return "bg-zinc-200 text-zinc-600";
   }
 }
 

@@ -28,7 +28,7 @@ type SeedData = {
     id: string;
     title: string;
     domain: string;
-    status: "hypothetical" | "real_in_progress" | "real_closed";
+    status: "hypothetical" | "real_in_progress" | "real_closed" | "cancelled";
     branch: string | null;
   }>;
   openQuestions: string[];

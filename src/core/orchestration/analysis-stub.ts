@@ -4,8 +4,10 @@ import { generateDeterministicAnalysis } from "@/core/orchestration/analysis-fal
 export type {
   AnalysisInput,
   AnalysisResult,
+  AnalysisRunResult,
   AnalysisSection,
-  DecisionScenario,
+  AnalysisSource,
+  ConversationTurn,
   RoleAssignment,
 } from "@/core/orchestration/analysis-core";
 
@@ -14,8 +16,6 @@ export {
   ANALYSIS_RESULT_STORAGE_KEY,
   FORBIDDEN_PHRASES,
   MAX_ACTIONS,
-  MAX_DECISION_SCENARIOS,
-  ROUTE_LABELS,
   SECTION_TITLES,
   collectAnalysisText,
   containsForbiddenPhrase,
@@ -23,7 +23,6 @@ export {
   countAnalysisCriticalFacts,
   isForbiddenMainQuestion,
   normalizeAnalysisResult,
-  scenarioSymbol as getScenarioSymbol,
 } from "@/core/orchestration/analysis-core";
 
 import type { AnalysisInput, AnalysisResult } from "@/core/orchestration/analysis-core";

@@ -12,26 +12,46 @@ export type RoleAssignment = {
   result: string;
 };
 
-export type DecisionScenario = {
-  tone: "positive" | "negative" | "warning";
-  action: string;
-};
-
 export type AnalysisSection = {
   title: string;
   content?: string;
   roleAssignments?: RoleAssignment[];
   actions?: string[];
-  scenarios?: DecisionScenario[];
 };
 
 export type AnalysisResult = {
   sections: AnalysisSection[];
   priority?: AnalysisPriority;
+  reply?: string;
+};
+
+export type AnalysisSource = "ai" | "fallback";
+
+export type AnalysisRunResult = {
+  result: AnalysisResult;
+  source: AnalysisSource;
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
+};
+
+export type ConversationTurn = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+export type ContinueAnalysisInput = {
+  facts: string;
+  history: ConversationTurn[];
+  newMessage: string;
 };
 
 export const MAX_ACTIONS = 4;
-export const MAX_DECISION_SCENARIOS = 3;
+
+/** Legacy sixth section title — ignored when normalizing stored analyses. */
+export const LEGACY_ROUTES_SECTION_TITLE = "🔀 How the route changes afterwards";
 
 export const SECTION_TITLES = [
   "🎯 Outcome",
@@ -39,14 +59,7 @@ export const SECTION_TITLES = [
   "🔑 Determining Fact",
   "👤 Who can confirm this fact?",
   "📋 How do we obtain this fact?",
-  "🔀 How the route changes afterwards",
 ] as const;
-
-export const ROUTE_LABELS: Record<DecisionScenario["tone"], string> = {
-  positive: "Факт подтверждён",
-  negative: "Факт опровергнут",
-  warning: "Определить невозможно",
-};
 
 const FORBIDDEN_FORK_PATTERNS = [
   /как family office должен организовать/i,
@@ -64,17 +77,6 @@ export const FORBIDDEN_PHRASES = [
   "необходимо учитывать",
   "family office должен",
 ];
-
-export function scenarioSymbol(tone: DecisionScenario["tone"]): string {
-  switch (tone) {
-    case "positive":
-      return "✅";
-    case "negative":
-      return "❌";
-    case "warning":
-      return "⚠";
-  }
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -102,23 +104,9 @@ function parseActions(raw: unknown): string[] {
     .slice(0, MAX_ACTIONS);
 }
 
-function parseScenarios(raw: unknown): DecisionScenario[] {
-  if (!Array.isArray(raw)) return [];
-  const scenarios: DecisionScenario[] = [];
-  for (const item of raw) {
-    if (!isRecord(item)) continue;
-    const tone = item.tone;
-    if (tone !== "positive" && tone !== "negative" && tone !== "warning") continue;
-    const action = typeof item.action === "string" ? item.action.trim() : "";
-    if (action) {
-      scenarios.push({ tone, action });
-    }
-  }
-  return scenarios.slice(0, MAX_DECISION_SCENARIOS);
-}
-
 export function collectAnalysisText(result: AnalysisResult): string {
   const parts: string[] = [];
+  if (result.reply) parts.push(result.reply);
   for (const section of result.sections) {
     if (section.content) parts.push(section.content);
     section.roleAssignments?.forEach((assignment) => {
@@ -126,10 +114,6 @@ export function collectAnalysisText(result: AnalysisResult): string {
       parts.push(assignment.result);
     });
     section.actions?.forEach((action) => parts.push(action));
-    section.scenarios?.forEach((scenario) => {
-      parts.push(ROUTE_LABELS[scenario.tone]);
-      parts.push(scenario.action);
-    });
   }
   return parts.join("\n").toLowerCase();
 }
@@ -152,31 +136,11 @@ function requireContent(section: Record<string, unknown> | undefined, name: stri
   return content;
 }
 
-function normalizeRoutes(scenarios: DecisionScenario[]): DecisionScenario[] {
-  const byTone = new Map<DecisionScenario["tone"], DecisionScenario>();
-  for (const scenario of scenarios) {
-    if (!byTone.has(scenario.tone)) {
-      byTone.set(scenario.tone, scenario);
-    }
-  }
-
-  const ordered: DecisionScenario[] = [];
-  for (const tone of ["positive", "negative", "warning"] as const) {
-    const scenario = byTone.get(tone);
-    if (scenario) ordered.push(scenario);
-  }
-
-  if (ordered.length !== MAX_DECISION_SCENARIOS) {
-    throw new Error("Must contain exactly three decision routes");
-  }
-
-  return ordered;
-}
-
 const URGENCIES = ["urgent", "soon", "no_deadline"] as const;
 const STAKES = ["high_irreversible", "moderate", "low_reversible"] as const;
 
-function parsePriority(raw: unknown): AnalysisPriority | undefined {
+/** Parses and validates a priority object from raw AI JSON. */
+export function parseAnalysisPriority(raw: unknown): AnalysisPriority | undefined {
   if (!isRecord(raw)) return undefined;
 
   const urgency = raw.urgency;
@@ -198,7 +162,14 @@ function parsePriority(raw: unknown): AnalysisPriority | undefined {
   };
 }
 
-/** Normalizes raw AI JSON into the canonical six-section AnalysisResult. */
+/** Parses optional reply from raw AI JSON. */
+export function parseAnalysisReply(raw: unknown): string | undefined {
+  if (!isRecord(raw)) return undefined;
+  const reply = typeof raw.reply === "string" ? raw.reply.trim() : "";
+  return reply || undefined;
+}
+
+/** Normalizes raw AI JSON into the canonical five-section AnalysisResult. */
 export function normalizeAnalysisResult(raw: unknown): AnalysisResult {
   if (!isRecord(raw) || !Array.isArray(raw.sections)) {
     throw new Error("Analysis JSON must contain sections array");
@@ -221,8 +192,6 @@ export function normalizeAnalysisResult(raw: unknown): AnalysisResult {
   const actions = parseActions(byTitle.get(SECTION_TITLES[4])?.actions);
   if (actions.length === 0) throw new Error("Missing actions to obtain the fact");
 
-  const scenarios = normalizeRoutes(parseScenarios(byTitle.get(SECTION_TITLES[5])?.scenarios));
-
   const result: AnalysisResult = {
     sections: [
       { title: SECTION_TITLES[0], content: outcome },
@@ -230,13 +199,17 @@ export function normalizeAnalysisResult(raw: unknown): AnalysisResult {
       { title: SECTION_TITLES[2], content: determiningFact },
       { title: SECTION_TITLES[3], roleAssignments },
       { title: SECTION_TITLES[4], actions },
-      { title: SECTION_TITLES[5], scenarios },
     ],
   };
 
-  const priority = parsePriority(isRecord(raw) ? raw.priority : undefined);
+  const priority = parseAnalysisPriority(raw);
   if (priority) {
     result.priority = priority;
+  }
+
+  const reply = parseAnalysisReply(raw);
+  if (reply) {
+    result.reply = reply;
   }
 
   if (containsForbiddenPhrase(collectAnalysisText(result))) {

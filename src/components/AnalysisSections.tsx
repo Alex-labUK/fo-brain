@@ -1,8 +1,4 @@
-import {
-  ROUTE_LABELS,
-  scenarioSymbol,
-  type AnalysisSection,
-} from "@/core/orchestration/analysis-core";
+import type { AnalysisSection } from "@/core/orchestration/analysis-core";
 
 type AnalysisSectionsProps = {
   sections: AnalysisSection[];
@@ -43,20 +39,6 @@ export function AnalysisSections({ sections }: AnalysisSectionsProps) {
                 </li>
               ))}
             </ul>
-          )}
-
-          {section.scenarios && section.scenarios.length > 0 && (
-            <div className="mt-3 space-y-2">
-              {section.scenarios.map((scenario) => (
-                <div key={scenario.tone} className="rounded-lg bg-zinc-50 px-4 py-3">
-                  <p className="text-sm font-medium text-zinc-900">
-                    {scenarioSymbol(scenario.tone)} {ROUTE_LABELS[scenario.tone]}
-                  </p>
-                  <p className="my-1 text-center text-xs text-zinc-400">↓</p>
-                  <p className="text-sm leading-snug text-zinc-700">{scenario.action}</p>
-                </div>
-              ))}
-            </div>
           )}
         </section>
       ))}

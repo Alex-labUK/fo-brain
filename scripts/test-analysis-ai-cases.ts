@@ -69,8 +69,11 @@ async function main(): Promise<void> {
   for (const testCase of CASES) {
     console.log(`\n========== CASE ${testCase.id} ==========`);
     try {
-      const result = await generateAnalysisWithAI(testCase.input);
+      const { result, usage } = await generateAnalysisWithAI(testCase.input);
       console.log("PATH: ai");
+      if (usage) {
+        console.log("USAGE:", usage);
+      }
       console.log(JSON.stringify(result, null, 2));
     } catch (error) {
       allOk = false;

@@ -1,9 +1,8 @@
-import type { AnalysisInput, AnalysisResult, RoleAssignment, DecisionScenario } from "@/core/orchestration/analysis-core";
+import type { AnalysisInput, AnalysisResult, RoleAssignment } from "@/core/orchestration/analysis-core";
 import {
   containsForbiddenPhrase,
   collectAnalysisText,
   MAX_ACTIONS,
-  MAX_DECISION_SCENARIOS,
   SECTION_TITLES,
 } from "@/core/orchestration/analysis-core";
 import type { SubsystemCatalogItem } from "@/core/orchestration/types";
@@ -31,6 +30,9 @@ const FALLBACK_PRIORITY: AnalysisPriority = {
   stake: "moderate",
   note: "Автоматическая оценка недоступна — резервный путь",
 };
+
+const FALLBACK_REPLY =
+  "Разобрали ситуацию по имеющимся данным. Напишите, если появятся новые факты — обновим разбор.";
 
 function includesAny(haystack: string, keywords: string[]): boolean {
   return keywords.some((k) => haystack.includes(k.toLowerCase()));
@@ -99,14 +101,6 @@ function buildContext(input: AnalysisInput): CaseContext {
   };
 }
 
-function standardRoutes(confirmed: string, disproved: string, unknown: string): DecisionScenario[] {
-  return [
-    { tone: "positive", action: confirmed },
-    { tone: "negative", action: disproved },
-    { tone: "warning", action: unknown },
-  ];
-}
-
 function buildLeakAnalysis(ctx: CaseContext): AnalysisResult {
   const outcome = shortenFact(
     ctx.desiredOutcome ||
@@ -130,13 +124,7 @@ function buildLeakAnalysis(ctx: CaseContext): AnalysisResult {
     "Подготовить техническое заключение.",
   ].slice(0, MAX_ACTIONS);
 
-  const scenarios = standardRoutes(
-    "Предъявить требования подрядчику по гарантии.",
-    "Готовить коммерческий ремонт за счёт семьи.",
-    "Не признавать ответственность и не давать письменное согласие до проверки договора и технической причины дефекта.",
-  );
-
-  return renderAnalysis(outcome, fork, determiningFact, roleAssignments, actions, scenarios);
+  return renderAnalysis(outcome, fork, determiningFact, roleAssignments, actions);
 }
 
 function buildGenericAnalysis(ctx: CaseContext): AnalysisResult {
@@ -162,13 +150,7 @@ function buildGenericAnalysis(ctx: CaseContext): AnalysisResult {
     "Зафиксировать, что уже подтверждено письменно.",
   ].slice(0, MAX_ACTIONS);
 
-  const scenarios = standardRoutes(
-    "Пересобрать маршрут с подтверждённым фактом.",
-    "Не принимать необратимых решений без факта.",
-    "Не эскалировать к принципалу до получения факта или явного тупика.",
-  );
-
-  return renderAnalysis(outcome, fork, determiningFact, roleAssignments, actions, scenarios);
+  return renderAnalysis(outcome, fork, determiningFact, roleAssignments, actions);
 }
 
 function renderAnalysis(
@@ -177,7 +159,6 @@ function renderAnalysis(
   determiningFact: string,
   roleAssignments: RoleAssignment[],
   actions: string[],
-  scenarios: DecisionScenario[],
 ): AnalysisResult {
   const result: AnalysisResult = {
     sections: [
@@ -186,12 +167,9 @@ function renderAnalysis(
       { title: SECTION_TITLES[2], content: determiningFact },
       { title: SECTION_TITLES[3], roleAssignments },
       { title: SECTION_TITLES[4], actions: actions.slice(0, MAX_ACTIONS) },
-      {
-        title: SECTION_TITLES[5],
-        scenarios: scenarios.slice(0, MAX_DECISION_SCENARIOS),
-      },
     ],
     priority: FALLBACK_PRIORITY,
+    reply: FALLBACK_REPLY,
   };
 
   if (containsForbiddenPhrase(collectAnalysisText(result))) {

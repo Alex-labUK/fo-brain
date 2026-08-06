@@ -1,7 +1,12 @@
 import { readFileSync, existsSync } from "fs";
 import path from "path";
 import OpenAI from "openai";
-import type { AnalysisInput, AnalysisResult } from "@/core/orchestration/analysis-core";
+import type {
+  AnalysisInput,
+  AnalysisResult,
+  ContinueAnalysisInput,
+  ConversationTurn,
+} from "@/core/orchestration/analysis-core";
 import { normalizeAnalysisResult, SECTION_TITLES } from "@/core/orchestration/analysis-core";
 
 const ANALYSIS_JSON_SCHEMA = `{
@@ -16,21 +21,14 @@ const ANALYSIS_JSON_SCHEMA = `{
     {
       "title": "${SECTION_TITLES[4]}",
       "actions": ["конкретное действие 1", "конкретное действие 2"]
-    },
-    {
-      "title": "${SECTION_TITLES[5]}",
-      "scenarios": [
-        { "tone": "positive", "action": "последствие если факт подтверждён" },
-        { "tone": "negative", "action": "последствие если факт опровергнут" },
-        { "tone": "warning", "action": "последствие если определить невозможно" }
-      ]
     }
   ],
   "priority": {
     "urgency": "urgent | soon | no_deadline",
     "stake": "high_irreversible | moderate | low_reversible",
     "note": "одно предложение — почему такая оценка приоритета"
-  }
+  },
+  "reply": "1–3 предложения — короткий ответ FO принципалу простым языком"
 }`;
 
 const THINKING_ORDER = `
@@ -41,13 +39,13 @@ const THINKING_ORDER = `
 3. Determining Fact — один недостающий факт, от которого зависит ветка
 4. Source of the Fact — кто может подтвердить (роль → что вернуть)
 5. Actions required to obtain the Fact — до четырёх конкретных действий, не вопросов
-6. Decision Routes — ровно три маршрута: positive / negative / warning
-7. Priority — оцени urgency (срочность по срокам) и stake (ставка/обратимость для принципала) независимо друг от друга; note — одно предложение, почему именно такая оценка
+6. Priority — оцени urgency (срочность по срокам) и stake (ставка/обратимость для принципала) независимо друг от друга; note — одно предложение, почему именно такая оценка
+7. Reply — 1–3 предложения, ответ FO принципалу: что учтено, на что обратить внимание
 `.trim();
 
 const OUTPUT_RULES = `
 Обязательные ограничения:
-- ровно шесть секций; title каждой секции — символ-в-символ как в JSON-схеме выше (включая эмодзи);
+- ровно пять секций; title каждой секции — символ-в-символ как в JSON-схеме выше (включая эмодзи);
 - Outcome — одно предложение; если цель принципала не названа явно, восстанови её из контекста и начни с «Предполагаемая цель принципала: ...»; без рекомендаций и пояснений помимо формулировки цели;
 - Main Decision Fork — ровно одна развилка, не список;
 - Main Decision Fork не должен быть пересказом Determining Fact. Это должны быть два содержательно разных пути действия или трактовки ситуации, а не одна и та же мысль, сформулированная дважды. Если получившийся Fork и Determining Fact означают одно и то же — переформулируй Fork;
@@ -55,7 +53,7 @@ const OUTPUT_RULES = `
 - Determining Fact никогда не должен утверждать причинно-следственную связь (X является/не является причиной Y), если это не подтверждено во входных данных. Если причинность неизвестна, формулируй Determining Fact как открытый вопрос о том, что предстоит установить (например: «является ли перепланировка причиной протечки»), но не как ответ на него — ни в одну, ни в другую сторону;
 - Who can confirm — массив roleAssignments: только role и result; без tasks; минимум одна роль;
 - How do we obtain — массив actions: от 1 до 4 конкретных действий в повелительном наклонении; не вопросы;
-- Decision Routes — массив scenarios: ровно три элемента с tone "positive", "negative", "warning" (по одному каждого); action — одно короткое последствие;
+- reply — 1–3 предложения, коротко, по-человечески, без жаргона; не повторяй дословно Outcome; отвечай как FO принципалу;
 - запрещённые слова и фразы: «недостаточно информации», «предварительный вывод», «рекомендуется», «следует», «важно», «необходимо учитывать», «Family Office должен»;
 - не выдумывать факты, которых нет во входе;
 - весь текст на русском языке;
@@ -67,15 +65,29 @@ const PRINCIPLE_FEW_SHOT = `
 Пример правильного применения: если собственная уязвимость клиента физически или юридически переплетена с предметом спора (как протечка и незаконная перепланировка в одном помещении), Main Decision Fork должен звучать как «эскалировать по существу сейчас — или сначала уладить/легализовать собственную уязвимость клиента, чтобы не дать контрагенту повод присмотреться к ней при эскалации», а не как факт-проверка, не связанная с этим риском.
 `.trim();
 
+const PROMPT_SECTION_END = "\n## 5.";
+
+const HISTORY_TRUNCATE_THRESHOLD = 12;
+const HISTORY_TAIL_COUNT = 10;
+
+function trimDecisionEngineForPrompt(fullMarkdown: string): string {
+  const cutIndex = fullMarkdown.indexOf(PROMPT_SECTION_END);
+  if (cutIndex === -1) {
+    return fullMarkdown;
+  }
+  return fullMarkdown.slice(0, cutIndex).trimEnd();
+}
+
 let cachedDecisionEngine: string | null = null;
 
-/** Loads decision-engine.md from the project root. */
+/** Loads decision-engine.md trimmed for AI prompt (sections 1–4a only). */
 export function loadDecisionEngineMarkdown(): string {
   if (cachedDecisionEngine) return cachedDecisionEngine;
 
   const rootPath = path.join(process.cwd(), "decision-engine.md");
   if (existsSync(rootPath)) {
-    cachedDecisionEngine = readFileSync(rootPath, "utf-8");
+    const full = readFileSync(rootPath, "utf-8");
+    cachedDecisionEngine = trimDecisionEngineForPrompt(full);
     return cachedDecisionEngine;
   }
 
@@ -119,14 +131,68 @@ function buildUserPrompt(input: AnalysisInput): string {
   return lines.join("\n");
 }
 
-/** Calls OpenAI and returns normalized AnalysisResult. */
-export async function generateAnalysisWithAI(input: AnalysisInput): Promise<AnalysisResult> {
+function formatHistoryLine(turn: ConversationTurn): string {
+  const label = turn.role === "user" ? "[Принципал]" : "[FO]";
+  return `${label}: ${turn.content.trim()}`;
+}
+
+function selectHistoryForPrompt(history: ConversationTurn[]): {
+  history: ConversationTurn[];
+  truncated: boolean;
+} {
+  if (history.length <= HISTORY_TRUNCATE_THRESHOLD) {
+    return { history, truncated: false };
+  }
+  return { history: history.slice(-HISTORY_TAIL_COUNT), truncated: true };
+}
+
+function buildContinueUserPrompt(input: ContinueAnalysisInput): string {
+  const { history, truncated } = selectHistoryForPrompt(input.history);
+  if (truncated) {
+    console.warn(
+      `[analysis] conversation history truncated: ${input.history.length} messages → last ${history.length}`,
+    );
+  }
+
+  const lines = [
+    "Исходные факты кейса:",
+    input.facts.trim(),
+    "",
+    "История переписки:",
+  ];
+
+  if (history.length === 0) {
+    lines.push("(пока нет предыдущих сообщений)");
+  } else {
+    lines.push(...history.map(formatHistoryLine));
+  }
+
+  lines.push(
+    "",
+    "Новое сообщение принципала:",
+    input.newMessage.trim(),
+    "",
+    "Обнови весь разбор (все пять секций и priority) с учётом всей истории и нового сообщения.",
+    "Обязательно верни reply — короткий ответ именно на новое сообщение принципала (1–3 предложения).",
+  );
+
+  return lines.join("\n");
+}
+
+type OpenAIAnalysisResponse = {
+  result: AnalysisResult;
+  usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+};
+
+async function callOpenAIAnalysis(
+  systemPrompt: string,
+  userPrompt: string,
+): Promise<OpenAIAnalysisResponse> {
   const apiKey = process.env.OPENAI_API_KEY?.trim();
   if (!apiKey) {
     throw new Error("OPENAI_API_KEY is not configured");
   }
 
-  const decisionEngine = loadDecisionEngineMarkdown();
   const client = new OpenAI({ apiKey });
 
   const response = await client.chat.completions.create({
@@ -134,10 +200,18 @@ export async function generateAnalysisWithAI(input: AnalysisInput): Promise<Anal
     temperature: 0.2,
     response_format: { type: "json_object" },
     messages: [
-      { role: "system", content: buildSystemPrompt(decisionEngine) },
-      { role: "user", content: buildUserPrompt(input) },
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
     ],
   });
+
+  const usage = response.usage
+    ? {
+        prompt_tokens: response.usage.prompt_tokens,
+        completion_tokens: response.usage.completion_tokens,
+        total_tokens: response.usage.total_tokens,
+      }
+    : undefined;
 
   const content = response.choices[0]?.message?.content;
   if (!content) {
@@ -151,5 +225,19 @@ export async function generateAnalysisWithAI(input: AnalysisInput): Promise<Anal
     throw new Error("OpenAI returned invalid JSON");
   }
 
-  return normalizeAnalysisResult(parsed);
+  return { result: normalizeAnalysisResult(parsed), usage };
+}
+
+/** Calls OpenAI and returns normalized AnalysisResult with token usage. */
+export async function generateAnalysisWithAI(input: AnalysisInput): Promise<OpenAIAnalysisResponse> {
+  const decisionEngine = loadDecisionEngineMarkdown();
+  return callOpenAIAnalysis(buildSystemPrompt(decisionEngine), buildUserPrompt(input));
+}
+
+/** Continues analysis with conversation history and a new principal message. */
+export async function continueAnalysisWithAI(
+  input: ContinueAnalysisInput,
+): Promise<OpenAIAnalysisResponse> {
+  const decisionEngine = loadDecisionEngineMarkdown();
+  return callOpenAIAnalysis(buildSystemPrompt(decisionEngine), buildContinueUserPrompt(input));
 }

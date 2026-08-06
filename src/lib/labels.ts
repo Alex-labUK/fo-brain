@@ -19,6 +19,9 @@ export const domainLabels: Record<string, string> = {
   admin_compliance: "Админ / комплаенс",
   structural_deal: "Структурная сделка",
   hiring_thirdparty_risk: "Найм / риск третьих лиц",
+  family_capacity_boundary: "Дееспособность / защита третьих лиц",
+  personnel_reputational: "Персонал / репутация",
+  structural_asset_registry: "Структурные реестры активов",
 };
 
 export const knownDomains = Object.keys(domainLabels);

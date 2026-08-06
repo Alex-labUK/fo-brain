@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { AnalysisSections } from "@/components/AnalysisSections";
 import { CaseStatusBadge, PrincipleStatusBadge } from "@/components/StatusBadge";
+import { normalizeAnalysisResult } from "@/core/orchestration/analysis-core";
 import { ensureSeeded } from "@/lib/ensure-seeded";
 import { formatDomain } from "@/lib/labels";
 import { prisma } from "@/lib/prisma";
@@ -33,6 +35,15 @@ export default async function CaseDetailPage({ params }: PageProps) {
 
   if (!caseItem) {
     notFound();
+  }
+
+  let storedAnalysis = null;
+  if (caseItem.analysisResult) {
+    try {
+      storedAnalysis = normalizeAnalysisResult(caseItem.analysisResult);
+    } catch {
+      storedAnalysis = null;
+    }
   }
 
   return (
@@ -103,6 +114,17 @@ export default async function CaseDetailPage({ params }: PageProps) {
             <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-zinc-700">
               {caseItem.recordedResult}
             </p>
+          </div>
+        )}
+
+        {storedAnalysis && (
+          <div>
+            <h2 className="text-sm font-medium uppercase tracking-wide text-zinc-500">
+              Разбор ИИ
+            </h2>
+            <div className="mt-4">
+              <AnalysisSections sections={storedAnalysis.sections} />
+            </div>
           </div>
         )}
 

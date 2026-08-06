@@ -104,6 +104,7 @@ model Case {
   questionsAsked Json       @default("[]")
   decisionTree   String     @default("")
   recordedResult String     @default("")
+  analysisResult Json?
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 

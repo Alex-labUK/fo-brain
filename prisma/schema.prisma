@@ -105,6 +105,9 @@ model Case {
   decisionTree   String     @default("")
   recordedResult String     @default("")
   analysisResult Json?
+  priorityUrgency String?
+  priorityStake   String?
+  priorityNote    String?
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 

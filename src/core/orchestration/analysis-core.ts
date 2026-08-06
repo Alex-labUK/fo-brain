@@ -1,8 +1,10 @@
 // Shared analysis types and utilities (no AI, no fallback templates).
 
+import type { AnalysisPriority } from "@/lib/priority";
+
 export type AnalysisInput = {
   whatHappened: string;
-  desiredOutcome: string;
+  desiredOutcome?: string;
 };
 
 export type RoleAssignment = {
@@ -25,6 +27,7 @@ export type AnalysisSection = {
 
 export type AnalysisResult = {
   sections: AnalysisSection[];
+  priority?: AnalysisPriority;
 };
 
 export const MAX_ACTIONS = 4;
@@ -170,6 +173,31 @@ function normalizeRoutes(scenarios: DecisionScenario[]): DecisionScenario[] {
   return ordered;
 }
 
+const URGENCIES = ["urgent", "soon", "no_deadline"] as const;
+const STAKES = ["high_irreversible", "moderate", "low_reversible"] as const;
+
+function parsePriority(raw: unknown): AnalysisPriority | undefined {
+  if (!isRecord(raw)) return undefined;
+
+  const urgency = raw.urgency;
+  const stake = raw.stake;
+  const note = typeof raw.note === "string" ? raw.note.trim() : "";
+
+  if (
+    !(URGENCIES as readonly string[]).includes(urgency as string) ||
+    !(STAKES as readonly string[]).includes(stake as string) ||
+    !note
+  ) {
+    return undefined;
+  }
+
+  return {
+    urgency: urgency as AnalysisPriority["urgency"],
+    stake: stake as AnalysisPriority["stake"],
+    note,
+  };
+}
+
 /** Normalizes raw AI JSON into the canonical six-section AnalysisResult. */
 export function normalizeAnalysisResult(raw: unknown): AnalysisResult {
   if (!isRecord(raw) || !Array.isArray(raw.sections)) {
@@ -205,6 +233,11 @@ export function normalizeAnalysisResult(raw: unknown): AnalysisResult {
       { title: SECTION_TITLES[5], scenarios },
     ],
   };
+
+  const priority = parsePriority(isRecord(raw) ? raw.priority : undefined);
+  if (priority) {
+    result.priority = priority;
+  }
 
   if (containsForbiddenPhrase(collectAnalysisText(result))) {
     throw new Error("Analysis output contains forbidden generic phrasing");

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AnalysisSections } from "@/components/AnalysisSections";
+import { PriorityBadge } from "@/components/PriorityBadge";
 import { CaseStatusBadge, PrincipleStatusBadge } from "@/components/StatusBadge";
 import { normalizeAnalysisResult } from "@/core/orchestration/analysis-core";
 import { ensureSeeded } from "@/lib/ensure-seeded";
@@ -72,6 +73,19 @@ export default async function CaseDetailPage({ params }: PageProps) {
         </div>
         <CaseStatusBadge status={caseItem.status} />
       </div>
+
+      {(caseItem.priorityUrgency || caseItem.priorityStake || caseItem.priorityNote) && (
+        <div className="mt-4 rounded-xl border border-zinc-200 bg-white px-5 py-4 shadow-sm">
+          <h2 className="text-sm font-medium uppercase tracking-wide text-zinc-500">Приоритет</h2>
+          <div className="mt-2">
+            <PriorityBadge
+              urgency={caseItem.priorityUrgency}
+              stake={caseItem.priorityStake}
+              note={caseItem.priorityNote}
+            />
+          </div>
+        </div>
+      )}
 
       <section className="mt-8 space-y-6">
         <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">

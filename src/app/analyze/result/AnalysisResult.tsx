@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useSyncExternalStore, useTransition } from "react";
 import type { CaseStatus } from "@prisma/client";
 import { saveAnalysisAsCase, runCaseAnalysis } from "@/app/analyze/actions";
+import { PriorityBadge } from "@/components/PriorityBadge";
 import { AnalysisSections } from "@/components/AnalysisSections";
 import {
   ANALYSIS_INPUT_STORAGE_KEY,
@@ -152,6 +153,15 @@ export function AnalysisResult({ subsystems }: AnalysisResultProps) {
 
   return (
     <div className="space-y-4">
+      {analysis.priority && (
+        <section className="rounded-xl border border-zinc-200 bg-white px-5 py-4 shadow-sm">
+          <h2 className="text-sm font-semibold text-zinc-900">Приоритет</h2>
+          <div className="mt-2">
+            <PriorityBadge priority={analysis.priority} />
+          </div>
+        </section>
+      )}
+
       <AnalysisSections sections={analysis.sections} />
 
       <section className="rounded-xl border border-zinc-200 bg-white px-5 py-4 shadow-sm">

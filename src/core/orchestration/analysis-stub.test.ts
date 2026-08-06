@@ -83,4 +83,12 @@ assert(countAnalysisActions(tripOnly) <= 4, "Max 4 actions for any case");
 assert(!(tripOnly.sections[1].content ?? "").includes("ребён"), "No child without input");
 assert(!containsForbiddenPhrase(JSON.stringify(tripOnly)), "No forbidden phrases in trip case");
 
+const leakWithoutOutcome = generateAnalysisStub({ whatHappened: LEAK_FACTS }, []);
+assert(leakWithoutOutcome.sections.length === 6, "Works without desiredOutcome");
+assert((leakWithoutOutcome.sections[0].content ?? "").length > 0, "Outcome without desiredOutcome");
+
+assert(leakAnalysis.priority?.urgency === "soon", "Fallback priority urgency");
+assert(leakAnalysis.priority?.stake === "moderate", "Fallback priority stake");
+assert(Boolean(leakAnalysis.priority?.note), "Fallback priority note");
+
 console.log("Analysis stub test passed.");

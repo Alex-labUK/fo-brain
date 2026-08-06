@@ -16,12 +16,20 @@ type CaseProfile =
   | "legal_dispute"
   | "insufficient";
 
+import type { AnalysisPriority } from "@/lib/priority";
+
 type CaseContext = {
   whatHappened: string;
   desiredOutcome: string;
   haystack: string;
   profile: CaseProfile;
   repairSubject: string;
+};
+
+const FALLBACK_PRIORITY: AnalysisPriority = {
+  urgency: "soon",
+  stake: "moderate",
+  note: "Автоматическая оценка недоступна — резервный путь",
 };
 
 function includesAny(haystack: string, keywords: string[]): boolean {
@@ -41,8 +49,8 @@ function detectRepairSubject(haystack: string): string {
   return "объекта";
 }
 
-function detectProfile(whatHappened: string, desiredOutcome: string): CaseProfile {
-  const haystack = `${whatHappened} ${desiredOutcome}`.toLowerCase();
+function detectProfile(whatHappened: string, desiredOutcome?: string): CaseProfile {
+  const haystack = `${whatHappened} ${desiredOutcome ?? ""}`.toLowerCase();
 
   const hasLeak = includesAny(haystack, ["протеч", "течь", "теч", "leak", "кровл", "крыш", "дымоход"]);
   const hasRepeatOrRepair = includesAny(haystack, [
@@ -80,7 +88,7 @@ function detectProfile(whatHappened: string, desiredOutcome: string): CaseProfil
 
 function buildContext(input: AnalysisInput): CaseContext {
   const whatHappened = input.whatHappened.trim();
-  const desiredOutcome = input.desiredOutcome.trim();
+  const desiredOutcome = input.desiredOutcome?.trim() ?? "";
   const haystack = `${whatHappened} ${desiredOutcome}`.toLowerCase();
   return {
     whatHappened,
@@ -100,7 +108,11 @@ function standardRoutes(confirmed: string, disproved: string, unknown: string): 
 }
 
 function buildLeakAnalysis(ctx: CaseContext): AnalysisResult {
-  const outcome = shortenFact(ctx.desiredOutcome, 160);
+  const outcome = shortenFact(
+    ctx.desiredOutcome ||
+      "Устранить протечку и определить, кто несёт ответственность за ремонт.",
+    160,
+  );
   const fork =
     "Можно ли уже сейчас признать случай гарантийным, или сначала нужно подтвердить, что повторный дефект относится к гарантийным обязательствам подрядчика?";
   const determiningFact =
@@ -128,7 +140,13 @@ function buildLeakAnalysis(ctx: CaseContext): AnalysisResult {
 }
 
 function buildGenericAnalysis(ctx: CaseContext): AnalysisResult {
-  const outcome = shortenFact(ctx.desiredOutcome || ctx.whatHappened, 160);
+  const inferredOutcome = ctx.desiredOutcome
+    ? shortenFact(ctx.desiredOutcome, 160)
+    : `Предполагаемая цель принципала: ${shortenFact(
+        `защитить интересы принципала и закрыть ситуацию «${ctx.whatHappened.slice(0, 80)}»`,
+        140,
+      )}`;
+  const outcome = inferredOutcome;
   const fork = ctx.desiredOutcome
     ? `Достигать «${shortenFact(ctx.desiredOutcome, 90)}» с имеющимися фактами или сначала закрыть один пробел в данных?`
     : `Действовать по текущим данным или сначала получить один подтверждённый факт?`;
@@ -173,6 +191,7 @@ function renderAnalysis(
         scenarios: scenarios.slice(0, MAX_DECISION_SCENARIOS),
       },
     ],
+    priority: FALLBACK_PRIORITY,
   };
 
   if (containsForbiddenPhrase(collectAnalysisText(result))) {

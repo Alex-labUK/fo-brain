@@ -21,13 +21,12 @@ export type SaveAnalysisAsCaseInput = {
 };
 
 function buildFactsFromInput(input: AnalysisInput): string {
-  return [
-    "Что произошло:",
-    input.whatHappened.trim(),
-    "",
-    "Желаемый результат принципала:",
-    input.desiredOutcome.trim(),
-  ].join("\n");
+  const lines = ["Что произошло:", input.whatHappened.trim()];
+  const desired = input.desiredOutcome?.trim();
+  if (desired) {
+    lines.push("", "Желаемый результат принципала:", desired);
+  }
+  return lines.join("\n");
 }
 
 function buildRecordedResultFromAnalysis(analysis: AnalysisResult): string {
@@ -59,6 +58,9 @@ export async function saveAnalysisAsCase(input: SaveAnalysisAsCaseInput): Promis
       facts: buildFactsFromInput(input.input),
       analysisResult: input.analysisResult,
       recordedResult: buildRecordedResultFromAnalysis(input.analysisResult),
+      priorityUrgency: input.analysisResult.priority?.urgency ?? null,
+      priorityStake: input.analysisResult.priority?.stake ?? null,
+      priorityNote: input.analysisResult.priority?.note ?? null,
       branchId: null,
       outcomeId: null,
       questionsAsked: [],
@@ -66,6 +68,7 @@ export async function saveAnalysisAsCase(input: SaveAnalysisAsCaseInput): Promis
   });
 
   revalidatePath("/");
+  revalidatePath("/cases");
   revalidatePath(`/cases/${id}`);
 
   return { id };

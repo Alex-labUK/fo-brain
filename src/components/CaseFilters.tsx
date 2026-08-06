@@ -51,7 +51,7 @@ export function CaseFilters({ domains, currentDomain, currentStatus }: CaseFilte
 
       {(currentDomain || currentStatus) && (
         <a
-          href="/"
+          href="/cases"
           className="rounded-lg px-3 py-1.5 text-sm text-zinc-500 hover:text-zinc-700"
         >
           Сбросить

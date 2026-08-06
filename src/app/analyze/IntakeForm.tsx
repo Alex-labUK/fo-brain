@@ -7,7 +7,6 @@ import { ANALYSIS_INPUT_STORAGE_KEY, ANALYSIS_RESULT_STORAGE_KEY, type AnalysisI
 export function IntakeForm() {
   const router = useRouter();
   const [whatHappened, setWhatHappened] = useState("");
-  const [desiredOutcome, setDesiredOutcome] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   function handleSubmit(event: React.FormEvent) {
@@ -17,14 +16,9 @@ export function IntakeForm() {
       setError("Опишите, что произошло");
       return;
     }
-    if (!desiredOutcome.trim()) {
-      setError("Укажите, какого результата хочет принципал");
-      return;
-    }
 
     const input: AnalysisInput = {
       whatHappened: whatHappened.trim(),
-      desiredOutcome: desiredOutcome.trim(),
     };
 
     sessionStorage.setItem(ANALYSIS_INPUT_STORAGE_KEY, JSON.stringify(input));
@@ -44,20 +38,6 @@ export function IntakeForm() {
           }}
           rows={10}
           placeholder="Опишите ситуацию своими словами..."
-          className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm leading-relaxed"
-        />
-      </label>
-
-      <label className="block space-y-2">
-        <span className="text-sm font-medium text-zinc-700">Какого результата хочет принципал?</span>
-        <textarea
-          value={desiredOutcome}
-          onChange={(e) => {
-            setDesiredOutcome(e.target.value);
-            setError(null);
-          }}
-          rows={5}
-          placeholder="Что принципал хочет получить в итоге..."
           className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm leading-relaxed"
         />
       </label>

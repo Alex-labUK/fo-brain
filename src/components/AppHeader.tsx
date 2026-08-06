@@ -11,11 +11,11 @@ export function AppHeader() {
           <p className="text-sm text-zinc-500">Method + Decision Engine</p>
         </Link>
         <div className="flex items-center gap-3">
-          <Link
-            href="/"
-            className="text-sm font-medium text-zinc-600 hover:text-zinc-900"
-          >
-            Дашборд
+          <Link href="/" className="text-sm font-medium text-zinc-600 hover:text-zinc-900">
+            Сейчас
+          </Link>
+          <Link href="/cases" className="text-sm font-medium text-zinc-600 hover:text-zinc-900">
+            Библиотека
           </Link>
           <Link
             href="/analyze"

@@ -81,14 +81,21 @@ directly from incoming information.
 
 # Current Status
 
-The repository currently focuses on:
+The only user today is Alexey. The domain is Family Office operations.
 
--   domain modelling;
--   reasoning methodology;
--   platform architecture;
--   documentation-first design.
+Everything described in VISION.md about multi-industry expansion (real estate,
+hospitality, healthcare, aviation, private equity) is a long-term hypothesis —
+not the current development scope.
 
-Implementation follows the specifications in this repository.
+No new work should target that hypothesis until the core loop works end to end:
+
+case → AI analysis grounded in root `decision-engine.md` → save → journal.
+
+Current implementation focus:
+
+- `/analyze` — six-block Decision Engine output via OpenAI + deterministic fallback;
+- existing orchestration routes (`/requests/new`, `/outcomes`, `/cases`) preserved;
+- documentation-first specs in `docs/` and root methodology files.
 
 ------------------------------------------------------------------------
 

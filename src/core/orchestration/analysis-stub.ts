@@ -7,19 +7,20 @@ export type {
   AnalysisSection,
   DecisionScenario,
   RoleAssignment,
-  RoleFactGroup,
 } from "@/core/orchestration/analysis-core";
 
 export {
   ANALYSIS_INPUT_STORAGE_KEY,
   ANALYSIS_RESULT_STORAGE_KEY,
   FORBIDDEN_PHRASES,
-  MAX_CRITICAL_FACTS,
+  MAX_ACTIONS,
   MAX_DECISION_SCENARIOS,
+  ROUTE_LABELS,
+  SECTION_TITLES,
   collectAnalysisText,
   containsForbiddenPhrase,
+  countAnalysisActions,
   countAnalysisCriticalFacts,
-  flattenFacts,
   isForbiddenMainQuestion,
   normalizeAnalysisResult,
   scenarioSymbol as getScenarioSymbol,

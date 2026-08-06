@@ -8,6 +8,7 @@ import {
   ANALYSIS_RESULT_STORAGE_KEY,
   generateAnalysisStub,
   getScenarioSymbol,
+  ROUTE_LABELS,
   type AnalysisInput,
   type AnalysisResult,
 } from "@/core/orchestration/analysis-stub";
@@ -51,6 +52,9 @@ export function AnalysisResult({ subsystems }: AnalysisResultProps) {
     let cancelled = false;
 
     async function loadAnalysis() {
+      if (!input) return;
+      const caseInput = input;
+
       const cached = sessionStorage.getItem(ANALYSIS_RESULT_STORAGE_KEY);
       if (cached) {
         try {
@@ -67,13 +71,13 @@ export function AnalysisResult({ subsystems }: AnalysisResultProps) {
       if (!cancelled) setLoading(true);
 
       try {
-        const result = await runCaseAnalysis(input);
+        const result = await runCaseAnalysis(caseInput);
         if (cancelled) return;
         sessionStorage.setItem(ANALYSIS_RESULT_STORAGE_KEY, JSON.stringify(result));
         setAnalysis(result);
       } catch {
         if (cancelled) return;
-        const fallback = generateAnalysisStub(input, subsystems);
+        const fallback = generateAnalysisStub(caseInput, subsystems);
         sessionStorage.setItem(ANALYSIS_RESULT_STORAGE_KEY, JSON.stringify(fallback));
         setAnalysis(fallback);
       } finally {
@@ -109,66 +113,50 @@ export function AnalysisResult({ subsystems }: AnalysisResultProps) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {analysis.sections.map((section) => (
         <section
           key={section.title}
-          className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm"
+          className="rounded-xl border border-zinc-200 bg-white px-5 py-4 shadow-sm"
         >
-          <h2 className="text-base font-semibold text-zinc-900">{section.title}</h2>
+          <h2 className="text-sm font-semibold text-zinc-900">{section.title}</h2>
 
           {section.content && (
-            <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-zinc-700">
-              {section.content}
-            </p>
-          )}
-
-          {section.facts && section.facts.length > 0 && (
-            <ul className="mt-4 list-disc space-y-2 pl-5 text-sm leading-relaxed text-zinc-700">
-              {section.facts.map((fact, index) => (
-                <li key={`${index}-${fact}`}>{fact}</li>
-              ))}
-            </ul>
+            <p className="mt-2 text-sm leading-snug text-zinc-800">{section.content}</p>
           )}
 
           {section.roleAssignments && section.roleAssignments.length > 0 && (
-            <div className="mt-4 space-y-6">
+            <div className="mt-3 space-y-3">
               {section.roleAssignments.map((assignment) => (
-                <div key={assignment.role} className="border-t border-zinc-100 pt-4 first:border-t-0 first:pt-0">
-                  <h3 className="text-sm font-semibold text-zinc-900">{assignment.role}</h3>
-                  {assignment.tasksHeading && (
-                    <p className="mt-2 text-sm font-medium text-zinc-800">{assignment.tasksHeading}:</p>
-                  )}
-                  <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-zinc-700">
-                    {assignment.tasks.map((task, index) => (
-                      <li key={`${assignment.role}-${index}`}>{task}</li>
-                    ))}
-                  </ul>
-                  <p className="mt-3 text-sm text-zinc-600">
-                    <span className="font-medium text-zinc-800">Результат:</span> {assignment.result}
-                  </p>
+                <div key={assignment.role} className="rounded-lg bg-zinc-50 px-4 py-3">
+                  <p className="text-sm font-medium text-zinc-900">{assignment.role}</p>
+                  <p className="my-1 text-center text-xs text-zinc-400">↓</p>
+                  <p className="text-sm leading-snug text-zinc-700">{assignment.result}</p>
                 </div>
               ))}
             </div>
           )}
 
+          {section.actions && section.actions.length > 0 && (
+            <ul className="mt-3 space-y-1.5 text-sm leading-snug text-zinc-800">
+              {section.actions.map((action, index) => (
+                <li key={`${index}-${action}`} className="flex gap-2">
+                  <span className="text-zinc-400">•</span>
+                  <span>{action}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+
           {section.scenarios && section.scenarios.length > 0 && (
-            <div className="mt-4 space-y-5">
-              {section.scenarios.map((scenario, index) => (
-                <div
-                  key={`${index}-${scenario.conditions.join("-")}`}
-                  className="rounded-lg bg-zinc-50 px-4 py-4"
-                >
-                  <p className="text-sm font-medium text-zinc-800">Если</p>
-                  <ul className="mt-2 space-y-1 text-sm leading-relaxed text-zinc-700">
-                    {scenario.conditions.map((condition) => (
-                      <li key={condition}>
-                        {getScenarioSymbol(scenario.tone)} {condition}
-                      </li>
-                    ))}
-                  </ul>
-                  <p className="my-2 text-center text-sm text-zinc-500">↓</p>
-                  <p className="text-sm leading-relaxed text-zinc-800">{scenario.action}</p>
+            <div className="mt-3 space-y-2">
+              {section.scenarios.map((scenario) => (
+                <div key={scenario.tone} className="rounded-lg bg-zinc-50 px-4 py-3">
+                  <p className="text-sm font-medium text-zinc-900">
+                    {getScenarioSymbol(scenario.tone)} {ROUTE_LABELS[scenario.tone]}
+                  </p>
+                  <p className="my-1 text-center text-xs text-zinc-400">↓</p>
+                  <p className="text-sm leading-snug text-zinc-700">{scenario.action}</p>
                 </div>
               ))}
             </div>
@@ -176,7 +164,7 @@ export function AnalysisResult({ subsystems }: AnalysisResultProps) {
         </section>
       ))}
 
-      <div className="flex flex-wrap gap-3 pt-2">
+      <div className="flex flex-wrap gap-3 pt-1">
         <Link
           href="/analyze"
           className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"

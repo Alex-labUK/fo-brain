@@ -1,93 +1,85 @@
-import "server-only";
-
 import { readFileSync, existsSync } from "fs";
 import path from "path";
 import OpenAI from "openai";
 import type { AnalysisInput, AnalysisResult } from "@/core/orchestration/analysis-core";
-import { normalizeAnalysisResult } from "@/core/orchestration/analysis-core";
+import { normalizeAnalysisResult, SECTION_TITLES } from "@/core/orchestration/analysis-core";
 
 const ANALYSIS_JSON_SCHEMA = `{
   "sections": [
+    { "title": "${SECTION_TITLES[0]}", "content": "одно предложение — чего хотим достичь" },
+    { "title": "${SECTION_TITLES[1]}", "content": "одна развилка — какое решение определяет весь маршрут" },
+    { "title": "${SECTION_TITLES[2]}", "content": "один недостающий подтверждённый факт — не список, не вопрос" },
     {
-      "title": "Главная развилка",
-      "content": "..."
+      "title": "${SECTION_TITLES[3]}",
+      "roleAssignments": [{ "role": "...", "result": "что эта роль должна вернуть" }]
     },
     {
-      "title": "Что нужно выяснить",
-      "roleGroups": [
-        {
-          "role": "...",
-          "questions": ["..."]
-        }
-      ]
+      "title": "${SECTION_TITLES[4]}",
+      "actions": ["конкретное действие 1", "конкретное действие 2"]
     },
     {
-      "title": "Кому поручить",
-      "roleAssignments": [
-        {
-          "role": "...",
-          "tasks": ["..."],
-          "tasksHeading": "Проверить",
-          "result": "..."
-        }
-      ]
-    },
-    {
-      "title": "Если выяснится...",
+      "title": "${SECTION_TITLES[5]}",
       "scenarios": [
-        {
-          "tone": "positive | negative | warning",
-          "conditions": ["..."],
-          "action": "..."
-        }
+        { "tone": "positive", "action": "последствие если факт подтверждён" },
+        { "tone": "negative", "action": "последствие если факт опровергнут" },
+        { "tone": "warning", "action": "последствие если определить невозможно" }
       ]
     }
   ]
 }`;
 
+const THINKING_ORDER = `
+Думай строго в этом порядке:
+0. Applied Principle — сначала определи, какой конкретно принцип или паттерн из раздела 4 документа («Принципы и паттерны») напрямую относится к этому кейсу. Разверни Main Decision Fork из напряжения, которое описывает этот принцип, а не из поверхностной формулировки кейса.
+1. Outcome — одно предложение, чего хотим достичь
+2. Main Decision Fork — одна развилка
+3. Determining Fact — один недостающий факт, от которого зависит ветка
+4. Source of the Fact — кто может подтвердить (роль → что вернуть)
+5. Actions required to obtain the Fact — до четырёх конкретных действий, не вопросов
+6. Decision Routes — ровно три маршрута: positive / negative / warning
+`.trim();
+
 const OUTPUT_RULES = `
 Обязательные ограничения:
-- одна конкретная развилка в блоке «Главная развилка»;
-- максимум пять решающих вопросов суммарно во всех roleGroups;
-- каждый вопрос должен менять маршрут решения;
-- каждое подразделение подключается только ради конкретного ответа;
-- максимум три сценария;
-- никаких универсальных фраз («недостаточно информации», «рекомендуется», «следует», «важно», «Family Office должен» и т.п.);
-- не использовать текст других кейсов;
-- не выдумывать факты;
-- если данных мало — задавать конкретный вопрос, а не общую фразу;
-- весь результат на русском языке.
+- ровно шесть секций; title каждой секции — символ-в-символ как в JSON-схеме выше (включая эмодзи);
+- Outcome — одно предложение, без рекомендаций и пояснений;
+- Main Decision Fork — ровно одна развилка, не список;
+- Main Decision Fork не должен быть пересказом Determining Fact. Это должны быть два содержательно разных пути действия или трактовки ситуации, а не одна и та же мысль, сформулированная дважды. Если получившийся Fork и Determining Fact означают одно и то же — переформулируй Fork;
+- Determining Fact — ровно одно утверждение о недостающем факте; без знака «?»; не список; не несколько фактов;
+- Who can confirm — массив roleAssignments: только role и result; без tasks; минимум одна роль;
+- How do we obtain — массив actions: от 1 до 4 конкретных действий в повелительном наклонении; не вопросы;
+- Decision Routes — массив scenarios: ровно три элемента с tone "positive", "negative", "warning" (по одному каждого); action — одно короткое последствие;
+- запрещённые слова и фразы: «недостаточно информации», «предварительный вывод», «рекомендуется», «следует», «важно», «необходимо учитывать», «Family Office должен»;
+- не выдумывать факты, которых нет во входе;
+- весь текст на русском языке;
+- показывай логику решения, не аналитический отчёт.
 `.trim();
 
 let cachedDecisionEngine: string | null = null;
 
-/** Loads decision-engine.md from the project root (or docs/architecture fallback). */
+/** Loads decision-engine.md from the project root. */
 export function loadDecisionEngineMarkdown(): string {
   if (cachedDecisionEngine) return cachedDecisionEngine;
 
-  const candidates = [
-    path.join(process.cwd(), "decision-engine.md"),
-    path.join(process.cwd(), "docs", "architecture", "decision-engine.md"),
-  ];
-
-  for (const candidate of candidates) {
-    if (existsSync(candidate)) {
-      cachedDecisionEngine = readFileSync(candidate, "utf-8");
-      return cachedDecisionEngine;
-    }
+  const rootPath = path.join(process.cwd(), "decision-engine.md");
+  if (existsSync(rootPath)) {
+    cachedDecisionEngine = readFileSync(rootPath, "utf-8");
+    return cachedDecisionEngine;
   }
 
-  throw new Error("decision-engine.md not found in project root or docs/architecture/");
+  throw new Error("decision-engine.md not found in project root");
 }
 
 function buildSystemPrompt(decisionEngine: string): string {
   return [
-    "Ты — аналитический модуль Family Office Brain. Применяй Decision Engine из документа ниже.",
+    "Ты — модуль принятия решений Family Office Brain. Применяй Decision Engine из документа ниже.",
     "Не пересказывай документ — используй его как модель мышления для конкретного кейса.",
     "",
     "--- Decision Engine ---",
     decisionEngine,
     "--- конец Decision Engine ---",
+    "",
+    THINKING_ORDER,
     "",
     "Верни только валидный JSON без markdown-обёртки.",
     "Формат ответа:",

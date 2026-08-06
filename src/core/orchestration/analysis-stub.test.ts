@@ -1,8 +1,9 @@
 import {
   containsForbiddenPhrase,
-  countAnalysisCriticalFacts,
+  countAnalysisActions,
   generateAnalysisStub,
   isForbiddenMainQuestion,
+  SECTION_TITLES,
 } from "@/core/orchestration/analysis-stub";
 
 function assert(condition: boolean, message: string): void {
@@ -18,68 +19,57 @@ const leakAnalysis = generateAnalysisStub(
 );
 
 const titles = leakAnalysis.sections.map((s) => s.title);
-assert(titles.length === 4, "Must have 4 sections");
-assert(titles[0] === "Главная развилка", "First section");
-assert(titles[1] === "Что нужно выяснить", "Second section");
-assert(titles[2] === "Кому поручить", "Third section");
-assert(titles[3] === "Если выяснится...", "Fourth section");
+assert(titles.length === 6, "Must have 6 sections");
+assert(titles[0] === SECTION_TITLES[0], "Outcome section");
+assert(titles[1] === SECTION_TITLES[1], "Fork section");
+assert(titles[2] === SECTION_TITLES[2], "Determining fact section");
+assert(titles[3] === SECTION_TITLES[3], "Sources section");
+assert(titles[4] === SECTION_TITLES[4], "Actions section");
+assert(titles[5] === SECTION_TITLES[5], "Routes section");
 
-const mainFork = leakAnalysis.sections[0].content ?? "";
-assert(
-  mainFork.includes("Можно ли уже сейчас признать случай гарантийным"),
-  "Fork must describe a decision point",
-);
+const outcome = leakAnalysis.sections[0].content ?? "";
+assert(outcome.length > 0 && !outcome.includes("\n"), "Outcome is one sentence");
+
+const mainFork = leakAnalysis.sections[1].content ?? "";
+assert(mainFork.includes("гарантий"), "Fork must describe warranty decision");
 assert(!isForbiddenMainQuestion(mainFork), "No forbidden templates");
 assert(!containsForbiddenPhrase(mainFork), "No forbidden phrases in fork");
 
-const factCount = countAnalysisCriticalFacts(leakAnalysis);
-assert(factCount === 5, `Must have exactly 5 critical facts, got ${factCount}`);
+const determiningFact = leakAnalysis.sections[2].content ?? "";
+assert(determiningFact.length > 0, "One determining fact required");
+assert(!determiningFact.includes("?"), "Determining fact is not a question");
 
-const facts = leakAnalysis.sections[1].facts ?? [];
-assert(facts.length === 5, "Five flat facts");
-assert(facts.some((f) => /гарант/i.test(f)), "Warranty applicability question included");
+const sources = leakAnalysis.sections[3].roleAssignments ?? [];
+assert(sources.some((s) => s.role === "Legal"), "Legal role must be present");
 assert(
-  facts.some((f) => /технич|причин/i.test(f)),
-  "Technical cause question included",
+  sources.some((s) => /house manager|technical|engineer/i.test(s.role)),
+  "House Manager or technical role must be present",
 );
+assert(sources.every((s) => s.result.length > 0), "Sources return values only");
 
-const assignments = leakAnalysis.sections[2].roleAssignments ?? [];
-assert(
-  assignments.some((a) => a.role === "Legal"),
-  "Legal role must be assigned",
-);
-assert(
-  assignments.some((a) => /house manager|technical/i.test(a.role)),
-  "House Manager or Technical role must be assigned",
-);
-assert(
-  assignments.some((a) => a.role === "House Manager" && a.tasks[0].includes("дымохода")),
-  "Chimney repair history",
-);
-assert(
-  assignments.some((a) => a.role === "Legal" && a.tasksHeading === "Проверить"),
-  "Legal check heading",
-);
-assert(
-  assignments.some((a) => a.role === "Legal" && a.result.includes("Юридическое заключение")),
-  "Legal result",
-);
+const actions = leakAnalysis.sections[4].actions ?? [];
+assert(actions.length >= 1 && actions.length <= 4, "Max four actions");
+assert(actions.every((a) => !a.includes("?")), "Actions are not questions");
+assert(countAnalysisActions(leakAnalysis) <= 4, "Max 4 actions");
 
-const scenarios = leakAnalysis.sections[3].scenarios ?? [];
-assert(scenarios.length <= 3, "Max 3 scenarios");
+const routes = leakAnalysis.sections[5].scenarios ?? [];
+assert(routes.length === 3, "Exactly three routes");
+assert(routes.some((r) => r.tone === "positive"), "Confirmed route");
+assert(routes.some((r) => r.tone === "negative"), "Disproved route");
+assert(routes.some((r) => r.tone === "warning"), "Unknown route");
 assert(
-  scenarios.some(
-    (s) =>
-      s.tone === "warning" &&
-      (/ответствен/i.test(s.action) || /договор/i.test(s.action)) &&
-      /технич|причин|дефект/i.test(s.action),
+  routes.some(
+    (r) =>
+      r.tone === "warning" &&
+      (/ответствен/i.test(r.action) || /договор/i.test(r.action)) &&
+      /технич|причин|дефект/i.test(r.action),
   ),
   "Must prohibit accepting responsibility before contract and technical cause check",
 );
 
 const leakText = JSON.stringify(leakAnalysis).toLowerCase();
-assert(leakText.includes("гарант"), "Warranty check in full analysis");
-assert(leakText.includes("технич"), "Technical cause in full analysis");
+assert(leakText.includes("гарант"), "Warranty in analysis");
+assert(leakText.includes("технич"), "Technical cause in analysis");
 
 const tripOnly = generateAnalysisStub(
   {
@@ -88,8 +78,9 @@ const tripOnly = generateAnalysisStub(
   },
   [],
 );
-assert(countAnalysisCriticalFacts(tripOnly) <= 5, "Max 5 facts for any case");
-assert(!(tripOnly.sections[0].content ?? "").includes("ребён"), "No child without input");
+assert(tripOnly.sections.length === 6, "Generic case has 6 sections");
+assert(countAnalysisActions(tripOnly) <= 4, "Max 4 actions for any case");
+assert(!(tripOnly.sections[1].content ?? "").includes("ребён"), "No child without input");
 assert(!containsForbiddenPhrase(JSON.stringify(tripOnly)), "No forbidden phrases in trip case");
 
 console.log("Analysis stub test passed.");

@@ -1,3 +1,5 @@
+Черновик, не используется кодом. Источник истины — decision-engine.md в корне репозитория.
+
 # Decision Engine
 
 Version: 1.0  

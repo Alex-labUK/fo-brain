@@ -7,7 +7,7 @@ import type {
   ContinueAnalysisInput,
   ConversationTurn,
 } from "@/core/orchestration/analysis-core";
-import { normalizeAnalysisResult, SECTION_TITLES } from "@/core/orchestration/analysis-core";
+import { normalizeAnalysisResult, MAX_ACTIONS, SECTION_TITLES } from "@/core/orchestration/analysis-core";
 
 const ANALYSIS_JSON_SCHEMA = `{
   "sections": [
@@ -38,7 +38,8 @@ const THINKING_ORDER = `
 2. Main Decision Fork — одна развилка
 3. Determining Fact — один недостающий факт, от которого зависит ветка
 4. Source of the Fact — кто может подтвердить (роль → что вернуть)
-5. Actions required to obtain the Fact — до четырёх конкретных действий, не вопросов
+5. Actions required to obtain the Fact — до четырёх конкретных действий, не вопросов; каждое действие напрямую подтверждает или опровергает Determining Fact
+5a. Internal Route-Change Check (мысленно, не в ответе) — перед финализацией Determining Fact проверь: если факт подтвердится — какой маршрут становится невозможным? если опровергнется? если не удастся установить в разумный срок? Если нет чёткого расхождения хотя бы по двум из трёх исходов — пересмотри Determining Fact и действия
 6. Priority — оцени urgency (срочность по срокам) и stake (ставка/обратимость для принципала) независимо друг от друга; note — одно предложение, почему именно такая оценка
 7. Reply — 1–3 предложения, ответ FO принципалу: что учтено, на что обратить внимание
 `.trim();
@@ -52,8 +53,9 @@ const OUTPUT_RULES = `
 - Determining Fact — ровно одно утверждение о недостающем факте; без знака «?»; не список; не несколько фактов;
 - Determining Fact никогда не должен утверждать причинно-следственную связь (X является/не является причиной Y), если это не подтверждено во входных данных. Если причинность неизвестна, формулируй Determining Fact как открытый вопрос о том, что предстоит установить (например: «является ли перепланировка причиной протечки»), но не как ответ на него — ни в одну, ни в другую сторону;
 - Who can confirm — массив roleAssignments: только role и result; без tasks; минимум одна роль;
-- How do we obtain — массив actions: от 1 до 4 конкретных действий в повелительном наклонении; не вопросы;
-- reply — 1–3 предложения, коротко, по-человечески, без жаргона; не повторяй дословно Outcome; отвечай как FO принципалу;
+- How do we obtain — массив actions: **не больше 4** конкретных действий в повелительном наклонении; каждое действие напрямую помогает подтвердить или опровергнуть Determining Fact; не вопросы; никакого общего due diligence и пунктов «на всякий случай»;
+- Internal Route-Change Check — **только внутреннее рассуждение, не поле JSON и не текст в reply**: перед финализацией Determining Fact мысленно проверь три исхода (подтверждён / опровергнут / не удалось установить в срок). Если Determining Fact не даёт чёткого расхождения хотя бы по двум из трёх — пересмотри Determining Fact, Fact Owner и Actions перед ответом. Не возвращай блок «Route Change» / «маршруты» — он осознанно убран из интерфейса;
+- reply — 1–3 предложения, коротко, по-человечески, без жаргона; не повторяй дословно Outcome; отвечай как FO принципалу; не описывай внутреннюю проверку маршрутов;
 - запрещённые слова и фразы: «недостаточно информации», «предварительный вывод», «рекомендуется», «следует», «важно», «необходимо учитывать», «Family Office должен»;
 - не выдумывать факты, которых нет во входе;
 - весь текст на русском языке;
@@ -184,6 +186,35 @@ type OpenAIAnalysisResponse = {
   usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function countRawActions(raw: unknown): number {
+  if (!isRecord(raw) || !Array.isArray(raw.sections)) return 0;
+
+  for (const section of raw.sections) {
+    if (!isRecord(section)) continue;
+    const title = typeof section.title === "string" ? section.title.trim() : "";
+    if (title !== SECTION_TITLES[4]) continue;
+    if (!Array.isArray(section.actions)) return 0;
+    return section.actions.filter(
+      (item): item is string => typeof item === "string" && item.trim().length > 0,
+    ).length;
+  }
+
+  return 0;
+}
+
+function warnIfActionsTruncated(raw: unknown): void {
+  const actionCount = countRawActions(raw);
+  if (actionCount > MAX_ACTIONS) {
+    console.warn(
+      `[analysis] actions truncated: ${actionCount} → ${MAX_ACTIONS} in "${SECTION_TITLES[4]}"`,
+    );
+  }
+}
+
 async function callOpenAIAnalysis(
   systemPrompt: string,
   userPrompt: string,
@@ -225,6 +256,7 @@ async function callOpenAIAnalysis(
     throw new Error("OpenAI returned invalid JSON");
   }
 
+  warnIfActionsTruncated(parsed);
   return { result: normalizeAnalysisResult(parsed), usage };
 }
 

@@ -23,6 +23,21 @@ export const domainLabels: Record<string, string> = {
   family_capacity_boundary: "Дееспособность / защита третьих лиц",
   personnel_reputational: "Персонал / репутация",
   structural_asset_registry: "Структурные реестры активов",
+  family_mandate_conflict: "Конфликт мандата внутри семьи",
+  security_threat: "Угроза безопасности",
+  routine_expense_relationship: "Рутинный расход и личные отношения",
+  project_budget_ceiling: "Бюджет проекта / потолок расходов",
+  medical_travel_readiness: "Медицинская готовность к поездке",
+  bank_payment_restriction: "Банковское ограничение платежа",
+  succession_mandate_boundary: "Передача полномочий преемнику",
+  philanthropy_naming_gift: "Благотворительность / именной дар",
+  staff_integrity_breach: "Нарушение добросовестности персонала",
+  principal_factual_misconception: "Заблуждение принципала",
+  undeterminable_fact_under_deadline: "Неустановимый факт под дедлайном",
+  principal_death_mandate_vacuum: "Смерть принципала / вакуум мандата",
+  principal_fraud_capacity_ambiguity: "Мошенничество против принципала / вопрос дееспособности",
+  compliance_filing_known_inaccuracy: "Заведомая неточность в комплаенс-подаче",
+  corporate_opportunity_conflict_of_interest: "Корпоративная возможность / конфликт интересов",
 };
 
 export const knownDomains = Object.keys(domainLabels);

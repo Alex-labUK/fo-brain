@@ -4,10 +4,19 @@ import { AnalysisSections } from "@/components/AnalysisSections";
 import { PriorityBadge } from "@/components/PriorityBadge";
 import { CaseStatusBadge } from "@/components/StatusBadge";
 import { CaseDetailControls } from "@/app/cases/[id]/CaseDetailControls";
-import { CaseDialogue } from "@/app/cases/[id]/CaseDialogue";
+import { CaseDialogueLauncher } from "@/app/cases/[id]/CaseDialogueLauncher";
+import { CollapsibleCaseBlock } from "@/app/cases/[id]/CollapsibleCaseBlock";
 import { normalizeAnalysisResult } from "@/core/orchestration/analysis-core";
 import { ensureSeeded } from "@/lib/ensure-seeded";
 import { formatDomain } from "@/lib/labels";
+import {
+  computePriorityColor,
+  parseStake,
+  parseUrgency,
+  priorityColorBadgeClass,
+  priorityColorLabels,
+  priorityColorMarkerClass,
+} from "@/lib/priority";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -41,17 +50,27 @@ export default async function CaseDetailPage({ params }: PageProps) {
     }
   }
 
+  const messages = caseItem.messages.map((message) => ({
+    id: message.id,
+    role: message.role,
+    content: message.content,
+    createdAt: message.createdAt.toISOString(),
+  }));
+
+  const priorityColor = computePriorityColor(
+    parseUrgency(caseItem.priorityUrgency),
+    parseStake(caseItem.priorityStake),
+  );
+
   return (
-    <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-8">
+    <main className="mx-auto w-full max-w-3xl px-6 py-6">
       <Link href="/cases" className="text-sm text-zinc-500 hover:text-zinc-700">
         ← К библиотеке кейсов
       </Link>
 
       <div className="mt-4 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">
-            {caseItem.title}
-          </h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">{caseItem.title}</h1>
           <p className="mt-1 text-sm text-zinc-500">
             {caseItem.id} · {formatDomain(caseItem.domain)}
             {caseItem.outcome && (
@@ -65,23 +84,42 @@ export default async function CaseDetailPage({ params }: PageProps) {
             )}
           </p>
         </div>
-        <CaseStatusBadge status={caseItem.status} />
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${priorityColorBadgeClass(priorityColor)}`}
+          >
+            <span className={`h-2 w-2 rounded-full ${priorityColorMarkerClass(priorityColor)}`} />
+            {priorityColorLabels[priorityColor]}
+          </span>
+          <CaseStatusBadge status={caseItem.status} />
+        </div>
       </div>
 
-      <CaseDetailControls
-        caseItem={{
-          id: caseItem.id,
-          title: caseItem.title,
-          domain: caseItem.domain,
-          status: caseItem.status,
-        }}
-      />
+      <details className="group mt-6 rounded-xl border border-zinc-200 bg-white shadow-sm">
+        <summary className="cursor-pointer list-none px-4 py-2.5 text-sm font-semibold text-zinc-900 marker:content-none [&::-webkit-details-marker]:hidden">
+          <span className="flex items-center justify-between gap-2">
+            Действия
+            <span className="text-xs font-normal text-zinc-400 group-open:hidden">показать</span>
+            <span className="hidden text-xs font-normal text-zinc-400 group-open:inline">скрыть</span>
+          </span>
+        </summary>
+        <div className="border-t border-zinc-100 px-4 pb-3 pt-2 [&>div]:mt-0 [&_section]:border-0 [&_section]:bg-transparent [&_section]:p-0 [&_section]:shadow-none [&_section_h2]:hidden">
+          <CaseDetailControls
+            caseItem={{
+              id: caseItem.id,
+              title: caseItem.title,
+              domain: caseItem.domain,
+              status: caseItem.status,
+            }}
+          />
+        </div>
+      </details>
 
-      <section className="mt-8 space-y-6">
+      <section className="mt-6 space-y-4">
         {(caseItem.priorityUrgency || caseItem.priorityStake || caseItem.priorityNote) && (
-          <div className="rounded-xl border border-zinc-200 bg-white px-5 py-4 shadow-sm">
-            <h2 className="text-sm font-medium uppercase tracking-wide text-zinc-500">Приоритет</h2>
-            <div className="mt-2">
+          <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3 shadow-sm">
+            <h2 className="text-xs font-medium uppercase tracking-wide text-zinc-500">Приоритет</h2>
+            <div className="mt-1.5">
               <PriorityBadge
                 urgency={caseItem.priorityUrgency}
                 stake={caseItem.priorityStake}
@@ -92,46 +130,32 @@ export default async function CaseDetailPage({ params }: PageProps) {
         )}
 
         {caseItem.decisionTree && (
-          <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <h2 className="text-sm font-medium uppercase tracking-wide text-zinc-500">
-              Дерево решений / рассуждение
-            </h2>
-            <p className="mt-2 whitespace-pre-wrap font-mono text-sm leading-relaxed text-zinc-700">
+          <CollapsibleCaseBlock title="Дерево решений / рассуждение">
+            <p className="whitespace-pre-wrap font-mono text-sm leading-snug text-zinc-700">
               {caseItem.decisionTree}
             </p>
-          </div>
+          </CollapsibleCaseBlock>
         )}
 
         {caseItem.recordedResult && !storedAnalysis && (
-          <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <h2 className="text-sm font-medium uppercase tracking-wide text-zinc-500">Итог</h2>
-            <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-zinc-700">
+          <CollapsibleCaseBlock title="Итог">
+            <p className="whitespace-pre-wrap text-sm leading-snug text-zinc-700">
               {caseItem.recordedResult}
             </p>
-          </div>
+          </CollapsibleCaseBlock>
         )}
 
         {storedAnalysis && (
           <div>
-            <h2 className="text-sm font-medium uppercase tracking-wide text-zinc-500">
-              Разбор ИИ
-            </h2>
-            <div className="mt-4">
+            <h2 className="text-xs font-medium uppercase tracking-wide text-zinc-500">Разбор ИИ</h2>
+            <div className="mt-3">
               <AnalysisSections sections={storedAnalysis.sections} />
             </div>
           </div>
         )}
       </section>
 
-      <CaseDialogue
-        caseId={caseItem.id}
-        messages={caseItem.messages.map((message) => ({
-          id: message.id,
-          role: message.role,
-          content: message.content,
-          createdAt: message.createdAt.toISOString(),
-        }))}
-      />
+      <CaseDialogueLauncher caseId={caseItem.id} messages={messages} />
     </main>
   );
 }

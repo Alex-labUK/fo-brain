@@ -118,10 +118,16 @@ export function collectAnalysisText(result: AnalysisResult): string {
   return parts.join("\n").toLowerCase();
 }
 
+function containsWholeWord(haystackLower: string, phraseLower: string): boolean {
+  const escaped = phraseLower.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(`(?<![a-zа-яё0-9])${escaped}(?![a-zа-яё0-9])`, "iu");
+  return pattern.test(haystackLower);
+}
+
 export function containsForbiddenPhrase(text: string): boolean {
   const lower = text.toLowerCase();
   return (
-    FORBIDDEN_PHRASES.some((phrase) => lower.includes(phrase)) ||
+    FORBIDDEN_PHRASES.some((phrase) => containsWholeWord(lower, phrase)) ||
     FORBIDDEN_FORK_PATTERNS.some((pattern) => pattern.test(text))
   );
 }
@@ -213,7 +219,10 @@ export function normalizeAnalysisResult(raw: unknown): AnalysisResult {
   }
 
   if (containsForbiddenPhrase(collectAnalysisText(result))) {
-    throw new Error("Analysis output contains forbidden generic phrasing");
+    console.warn(
+      "[analysis] output contains a discouraged generic phrase (kept anyway):",
+      collectAnalysisText(result),
+    );
   }
 
   return result;

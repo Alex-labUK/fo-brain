@@ -14,18 +14,21 @@ export type CaseMessageItem = {
 type CaseDialogueProps = {
   caseId: string;
   messages: CaseMessageItem[];
+  className?: string;
 };
 
-export function CaseDialogue({ caseId, messages }: CaseDialogueProps) {
+export function CaseDialogue({ caseId, messages, className }: CaseDialogueProps) {
   const router = useRouter();
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length]);
+    const container = scrollRef.current;
+    if (!container) return;
+    container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+  }, [messages.length, messages.at(-1)?.id]);
 
   function handleSubmit(event?: React.FormEvent) {
     event?.preventDefault();
@@ -52,13 +55,15 @@ export function CaseDialogue({ caseId, messages }: CaseDialogueProps) {
   }
 
   return (
-    <section className="mt-8">
-      <h2 className="text-sm font-medium uppercase tracking-wide text-zinc-500">Переписка</h2>
-
-      <div className="mt-4 space-y-3">
+    <section className={`flex min-h-0 flex-col ${className ?? ""}`}>
+      <div
+        ref={scrollRef}
+        className="min-h-[160px] flex-1 space-y-3 overflow-y-auto overscroll-contain pr-1 pt-3"
+      >
         {messages.length === 0 ? (
           <p className="rounded-xl border border-dashed border-zinc-200 bg-zinc-50 px-4 py-6 text-center text-sm text-zinc-500">
-            Напишите, что изменилось или что нужно уточнить — разбор обновится с учётом новых фактов.
+            Напишите, что изменилось или что нужно уточнить — разбор обновится с учётом новых
+            фактов.
           </p>
         ) : (
           messages.map((message) => {
@@ -77,7 +82,12 @@ export function CaseDialogue({ caseId, messages }: CaseDialogueProps) {
                 >
                   {!isUser && (
                     <p className="mb-1 text-xs font-medium uppercase tracking-wide text-zinc-400">
-                      FO
+                      Family Office Brain
+                    </p>
+                  )}
+                  {isUser && (
+                    <p className="mb-1 text-xs font-medium uppercase tracking-wide text-zinc-400">
+                      Вы
                     </p>
                   )}
                   <p className="whitespace-pre-wrap">{message.content}</p>
@@ -86,18 +96,17 @@ export function CaseDialogue({ caseId, messages }: CaseDialogueProps) {
             );
           })
         )}
-        <div ref={bottomRef} />
       </div>
 
-      <form onSubmit={handleSubmit} className="mt-4 space-y-2">
+      <form onSubmit={handleSubmit} className="mt-2 shrink-0 space-y-2 border-t border-zinc-100 pt-2">
         <textarea
-          rows={3}
+          rows={2}
           value={text}
           onChange={(event) => setText(event.target.value)}
           onKeyDown={handleKeyDown}
           disabled={isPending}
           placeholder="Что нового?"
-          className="w-full rounded-xl border border-zinc-200 px-4 py-3 text-sm leading-relaxed focus:border-zinc-400 focus:outline-none disabled:opacity-60"
+          className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm leading-relaxed focus:border-zinc-400 focus:outline-none disabled:opacity-60"
         />
         <div className="flex items-center justify-between gap-3">
           <p className="text-xs text-zinc-400">Enter — отправить, Shift+Enter — новая строка</p>

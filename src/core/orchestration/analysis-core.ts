@@ -152,12 +152,16 @@ export function parseAnalysisPriority(raw: unknown): AnalysisPriority | undefine
   const urgency = raw.urgency;
   const stake = raw.stake;
   const note = typeof raw.note === "string" ? raw.note.trim() : "";
-
-  if (
-    !(URGENCIES as readonly string[]).includes(urgency as string) ||
-    !(STAKES as readonly string[]).includes(stake as string) ||
-    !note
-  ) {
+  const valid =
+    (URGENCIES as readonly string[]).includes(urgency as string) &&
+    (STAKES as readonly string[]).includes(stake as string) &&
+    !!note;
+  if (!valid) {
+    console.warn("[analysis] priority rejected by parseAnalysisPriority:", {
+      urgency,
+      stake,
+      note,
+    });
     return undefined;
   }
 
@@ -208,7 +212,7 @@ export function normalizeAnalysisResult(raw: unknown): AnalysisResult {
     ],
   };
 
-  const priority = parseAnalysisPriority(raw);
+  const priority = parseAnalysisPriority(isRecord(raw) ? raw.priority : undefined);
   if (priority) {
     result.priority = priority;
   }

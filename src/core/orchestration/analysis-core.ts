@@ -30,6 +30,8 @@ export type AnalysisSource = "ai" | "fallback";
 export type AnalysisRunResult = {
   result: AnalysisResult;
   source: AnalysisSource;
+  /** Updated case memory from continue-analysis AI; persisted only on Case.caseMemory. */
+  updatedCaseMemory?: string;
   usage?: {
     prompt_tokens: number;
     completion_tokens: number;
@@ -46,7 +48,10 @@ export type ContinueAnalysisInput = {
   facts: string;
   history: ConversationTurn[];
   newMessage: string;
+  caseMemory: string;
 };
+
+export const MAX_CASE_MEMORY_BULLETS = 15;
 
 export const MAX_ACTIONS = 4;
 
@@ -93,7 +98,7 @@ function parseRoleAssignments(raw: unknown): RoleAssignment[] {
       assignments.push({ role, result });
     }
   }
-  return assignments;
+  return assignments.slice(0, 2);
 }
 
 function parseActions(raw: unknown): string[] {
@@ -179,6 +184,27 @@ export function parseAnalysisReply(raw: unknown): string | undefined {
   return reply || undefined;
 }
 
+/** Normalizes compact case memory to a bullet list capped at MAX_CASE_MEMORY_BULLETS. */
+export function normalizeCaseMemory(text: string): string {
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      if (/^[-•*]\s/.test(line)) return line.replace(/^[-•*]\s*/, "- ");
+      return `- ${line}`;
+    });
+
+  return lines.slice(0, MAX_CASE_MEMORY_BULLETS).join("\n");
+}
+
+/** Parses caseMemory from raw AI JSON. */
+export function parseCaseMemory(raw: unknown): string {
+  if (!isRecord(raw)) return "";
+  const memory = typeof raw.caseMemory === "string" ? raw.caseMemory.trim() : "";
+  return memory ? normalizeCaseMemory(memory) : "";
+}
+
 /** Normalizes raw AI JSON into the canonical five-section AnalysisResult. */
 export function normalizeAnalysisResult(raw: unknown): AnalysisResult {
   if (!isRecord(raw) || !Array.isArray(raw.sections)) {
@@ -202,6 +228,9 @@ export function normalizeAnalysisResult(raw: unknown): AnalysisResult {
   const actions = parseActions(byTitle.get(SECTION_TITLES[4])?.actions);
   if (actions.length === 0) throw new Error("Missing actions to obtain the fact");
 
+  const priority = parseAnalysisPriority(isRecord(raw) ? raw.priority : undefined);
+  const reply = parseAnalysisReply(raw);
+
   const result: AnalysisResult = {
     sections: [
       { title: SECTION_TITLES[0], content: outcome },
@@ -212,12 +241,10 @@ export function normalizeAnalysisResult(raw: unknown): AnalysisResult {
     ],
   };
 
-  const priority = parseAnalysisPriority(isRecord(raw) ? raw.priority : undefined);
   if (priority) {
     result.priority = priority;
   }
 
-  const reply = parseAnalysisReply(raw);
   if (reply) {
     result.reply = reply;
   }

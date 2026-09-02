@@ -31,9 +31,9 @@ export async function generateAnalysis(input: AnalysisInput): Promise<AnalysisRu
 export async function continueAnalysis(input: ContinueAnalysisInput): Promise<AnalysisRunResult> {
   if (process.env.OPENAI_API_KEY?.trim()) {
     try {
-      const { result, usage } = await continueAnalysisWithAI(input);
+      const { result, usage, caseMemory } = await continueAnalysisWithAI(input);
       console.info("[analysis] path=ai continue", usage ? { usage } : undefined);
-      return { result, source: "ai", usage };
+      return { result, source: "ai", usage, updatedCaseMemory: caseMemory };
     } catch (error) {
       console.error("[analysis] AI continue failed:", error);
     }
@@ -43,7 +43,15 @@ export async function continueAnalysis(input: ContinueAnalysisInput): Promise<An
 
   console.info("[analysis] path=fallback (continue)");
   return {
-    result: { sections: [] },
+    result: {
+      sections: [],
+      priority: {
+        urgency: "no_deadline",
+        stake: "low_reversible",
+        note: "AI analysis is temporarily unavailable.",
+      },
+      reply: "AI analysis is temporarily unavailable.",
+    },
     source: "fallback",
   };
 }

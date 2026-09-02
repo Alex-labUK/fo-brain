@@ -49,6 +49,8 @@ export type ContinueAnalysisInput = {
   history: ConversationTurn[];
   newMessage: string;
   caseMemory: string;
+  currentFork?: string;
+  currentDeterminingFact?: string;
 };
 
 export const MAX_CASE_MEMORY_BULLETS = 15;
@@ -175,6 +177,21 @@ export function parseAnalysisPriority(raw: unknown): AnalysisPriority | undefine
     stake: stake as AnalysisPriority["stake"],
     note,
   };
+}
+
+export type FactCheck = {
+  contradictsEarlier: boolean;
+  note: string;
+};
+
+/** Parses the optional factCheck object from raw AI JSON (continue-mode only). */
+export function parseFactCheck(raw: unknown): FactCheck | undefined {
+  if (!isRecord(raw)) return undefined;
+  const factCheckRaw = raw.factCheck;
+  if (!isRecord(factCheckRaw)) return undefined;
+  const contradictsEarlier = factCheckRaw.contradictsEarlier === true;
+  const note = typeof factCheckRaw.note === "string" ? factCheckRaw.note.trim() : "";
+  return { contradictsEarlier, note };
 }
 
 /** Parses optional reply from raw AI JSON. */

@@ -7,7 +7,7 @@ import type {
   ContinueAnalysisInput,
   ConversationTurn,
 } from "@/core/orchestration/analysis-core";
-import { normalizeAnalysisResult, MAX_ACTIONS, SECTION_TITLES } from "@/core/orchestration/analysis-core";
+import { normalizeAnalysisResult, parseCaseMemory, parseFactCheck, MAX_ACTIONS, SECTION_TITLES } from "@/core/orchestration/analysis-core";
 
 const ANALYSIS_JSON_SCHEMA = `{
   "sections": [
@@ -31,31 +31,49 @@ const ANALYSIS_JSON_SCHEMA = `{
   "reply": "1–3 предложения — прямой ответ руководителю FO, который ведёт этот диалог с системой: что учтено из новых вводных и что это меняет для решения"
 }`;
 
+const CONTINUE_ANALYSIS_JSON_SCHEMA = `${ANALYSIS_JSON_SCHEMA.slice(0, -2)},
+  "caseMemory": "- подтверждённый факт или открытое неизвестное\\n- ещё один пункт (5–15 коротких пунктов всего)",
+  "factCheck": {
+    "contradictsEarlier": true,
+    "note": "если contradictsEarlier=true — одно предложение: что именно противоречит ранее сказанному и какая версия учтена и почему; если false — пустая строка"
+  }
+}`;
+
+const CASE_MEMORY_RULES = `
+- caseMemory — компактная внутренняя память кейса: 5–15 коротких пунктов маркированным списком (строки через \\n, каждая с «- »);
+- включай только: подтверждённые факты из диалога; открытые существенные неизвестности; ограничения, влияющие на решение;
+- не включай: полный текст переписки; общие рекомендации; старые reply; лишние формулировки;
+- сохраняй ранее подтверждённые факты из текущей памяти кейса, если новое сообщение их явно не исправляет или не отменяет;
+- обнови caseMemory с учётом нового сообщения и недавней переписки;
+- если новое сообщение противоречит ранее зафиксированному факту (в памяти кейса или истории переписки) — не выбирай молча одну из версий: явно укажи это противоречие в reply одним предложением и либо прямо спроси, какая версия верна, либо обоснуй, почему учитываешь именно новую версию.
+`.trim();
+
 const THINKING_ORDER = `
 Думай строго в этом порядке:
-0. Applied Principle — сначала определи, какой конкретно принцип или паттерн из раздела 4 документа («Принципы и паттерны») напрямую относится к этому кейсу. Разверни Main Decision Fork из напряжения, которое описывает этот принцип, а не из поверхностной формулировки кейса.
-1. Outcome — одно предложение, чего хотим достичь; если желаемый результат принципала не указан явно во входе, восстанови наиболее вероятную цель из контекста ситуации и типичной роли FO (защита интересов принципала по умолчанию) и начни Outcome с «Предполагаемая цель принципала: ...»
-2. Main Decision Fork — одна развилка
-3. Determining Fact — один недостающий факт, от которого зависит ветка
-4. Source of the Fact — кто может подтвердить (роль → что вернуть)
-5. Actions required to obtain the Fact — до четырёх конкретных действий, не вопросов; каждое действие напрямую подтверждает или опровергает Determining Fact
-5a. Internal Route-Change Check (мысленно, не в ответе) — перед финализацией Determining Fact проверь: если факт подтвердится — какой маршрут становится невозможным? если опровергнется? если не удастся установить в разумный срок? Если нет чёткого расхождения хотя бы по двум из трёх исходов — пересмотри Determining Fact и действия
-6. Priority — оцени urgency (срочность по срокам) и stake (ставка/обратимость для принципала) независимо друг от друга; note — одно предложение, почему именно такая оценка
-7. Reply — 1–3 предложения, прямой ответ руководителю FO (пользователю системы): что учтено из новых вводных, что это меняет в развилке и на что обратить внимание при выборе маршрута
+0. Нормализация текущего кейса (мысленно, не в ответе) — зафиксируй: подтверждённые факты; неизвестное; допущения; не делай выводов о причинности без оснований
+1. Outcome — одно предложение, желаемое состояние; если цель принципала не указана явно во входе, восстанови наиболее вероятную цель из контекста ситуации и типичной роли FO (защита интересов принципала по умолчанию) и начни Outcome с «Предполагаемая цель принципала: ...»
+2. Main Decision Fork — одна конкретная развилка, выведенная из фактов кейса и Outcome; не выбирай развилку, сначала подбирая принцип или паттерн
+3. Determining Fact — один недостающий факт, от которого меняется маршрут
+4. Principle / Pattern Calibration — только теперь проверь, какой подтверждённый принцип или паттерн из базы знаний ниже уместен; используй его, чтобы уточнить или откалибровать Fork/Fact; не подгоняй кейс под шаблон; если прямого совпадения нет — продолжай без принципа/паттерна
+5. Source of the Fact — кто может подтвердить (роль → что вернуть)
+6. Actions required to obtain the Fact — до четырёх конкретных действий, не вопросов; каждое действие напрямую подтверждает или опровергает Determining Fact
+6a. Internal Route-Change Check (мысленно, не в ответе) — перед финализацией Determining Fact проверь: если факт подтвердится — какой маршрут становится невозможным? если опровергнется? если не удастся установить в разумный срок? Если нет чёткого расхождения хотя бы по двум из трёх исходов — пересмотри Determining Fact и действия
+7. Priority — оцени urgency (срочность по срокам) и stake (ставка/обратимость для принципала) независимо друг от друга; note — одно предложение, почему именно такая оценка
+8. Reply — 1–3 предложения, прямой ответ руководителю FO (пользователю системы): что учтено из новых вводных, что это меняет в развилке и на что обратить внимание при выборе маршрута
 `.trim();
 
 const OUTPUT_RULES = `
 Обязательные ограничения:
 - ровно пять секций; title каждой секции — символ-в-символ как в JSON-схеме выше (включая эмодзи);
 - Outcome — одно предложение; если цель принципала не названа явно, восстанови её из контекста и начни с «Предполагаемая цель принципала: ...»; без рекомендаций и пояснений помимо формулировки цели;
-- Main Decision Fork — ровно одна развилка, не список;
+- Main Decision Fork — ровно одна развилка, не список; выводи её из фактов кейса и Outcome, а не из предварительного подбора принципа или паттерна;
 - Main Decision Fork не должен быть пересказом Determining Fact. Это должны быть два содержательно разных пути действия или трактовки ситуации, а не одна и та же мысль, сформулированная дважды. Если получившийся Fork и Determining Fact означают одно и то же — переформулируй Fork;
 - Determining Fact — ровно одно утверждение о недостающем факте; без знака «?»; не список; не несколько фактов;
 - Determining Fact никогда не должен утверждать причинно-следственную связь (X является/не является причиной Y), если это не подтверждено во входных данных. Если причинность неизвестна, формулируй Determining Fact как открытый вопрос о том, что предстоит установить (например: «является ли перепланировка причиной протечки»), но не как ответ на него — ни в одну, ни в другую сторону;
 - Who can confirm — массив roleAssignments: только role и result; без tasks; минимум одна роль;
 - How do we obtain — массив actions: **не больше 4** конкретных действий в повелительном наклонении; каждое действие напрямую помогает подтвердить или опровергнуть Determining Fact; не вопросы; никакого общего due diligence и пунктов «на всякий случай»;
 - Internal Route-Change Check — **только внутреннее рассуждение, не поле JSON и не текст в reply**: перед финализацией Determining Fact мысленно проверь три исхода (подтверждён / опровергнут / не удалось установить в срок). Если Determining Fact не даёт чёткого расхождения хотя бы по двум из трёх — пересмотри Determining Fact, Fact Owner и Actions перед ответом. Не возвращай блок «Route Change» / «маршруты» — он осознанно убран из интерфейса;
-- reply — 1–3 предложения, содержательное продолжение разбора для руководителя FO как пользователя системы: что изменилось, на что обратить внимание при выборе маршрута; не повторяй дословно Outcome; не пиши как письмо или сообщение принципалу («мы проверим и сообщим вам»); не описывай внутреннюю проверку маршрутов;
+- reply — 1–3 предложения, содержательное продолжение разбора для руководителя FO как пользователя системы: что изменилось, на что обратить внимание при выборе маршрута; не повторяй дословно Outcome; не повторяй по смыслу свою же предыдущую reply из истории переписки — если нечего добавить содержательно, явно скажи, что именно из нового сообщения учтено и почему это не меняет текущий Fork/Fact, а не давай generic-формулировку; не пиши как письмо или сообщение принципалу («мы проверим и сообщим вам»); не описывай внутреннюю проверку маршрутов;
 - запрещённые слова и фразы: «недостаточно информации», «предварительный вывод», «рекомендуется», «следует», «важно», «необходимо учитывать», «Family Office должен»;
 - не выдумывать факты, которых нет во входе;
 - весь текст на русском языке;
@@ -64,7 +82,7 @@ const OUTPUT_RULES = `
 `.trim();
 
 const PRINCIPLE_FEW_SHOT = `
-Пример правильного применения: если собственная уязвимость клиента физически или юридически переплетена с предметом спора (как протечка и незаконная перепланировка в одном помещении), Main Decision Fork должен звучать как «эскалировать по существу сейчас — или сначала уладить/легализовать собственную уязвимость клиента, чтобы не дать контрагенту повод присмотреться к ней при эскалации», а не как факт-проверка, не связанная с этим риском.
+Пример калибровки (шаг 4): после того как из фактов кейса выведена развилка (например, протечка и незаконная перепланировка в одном помещении), принцип о переплетённой уязвимости может подсказать формулировку Fork — «эскалировать по существу сейчас — или сначала уладить/легализовать собственную уязвимость клиента, чтобы не дать контрагенту повод присмотреться к ней при эскалации», а не заменять развилку несвязанной факт-проверкой. Принцип не задаёт развилку — он уточняет уже выведенную из кейса.
 `.trim();
 
 const PROMPT_SECTION_START = "## 0.";
@@ -157,7 +175,9 @@ function patternDisplayTitle(pattern: PromptPattern): string {
 function buildCompactPrinciplesAndPatternsBlock(): string {
   const { principles, patterns } = loadPromptSeedData();
   const lines: string[] = [
-    "## Принципы (подтверждены на 3+ доменах)",
+    "## Принципы и паттерны (только для калибровки на шаге 4 — не отправная точка рассуждения)",
+    "",
+    "### Принципы (подтверждены на 3+ доменах)",
   ];
 
   for (const principle of principles) {
@@ -166,7 +186,7 @@ function buildCompactPrinciplesAndPatternsBlock(): string {
 
   lines.push(
     "",
-    "## Паттерны (кандидаты и предварительные находки — применяй с меньшей уверенностью, чем принципы)",
+    "## Паттерны (кандидаты и предварительные находки — калибровка с меньшей уверенностью, чем принципы; не подгоняй кейс)",
   );
 
   for (const pattern of patterns) {
@@ -195,6 +215,7 @@ function loadAnalysisPromptContext(): string {
 function buildSystemPrompt(decisionEngine: string): string {
   return [
     "Ты — модуль принятия решений Family Office Brain. Применяй Decision Engine из документа ниже.",
+    "Сначала рассуждай от текущего кейса; принципы и паттерны из базы знаний — только для калибровки (шаг 4), не как стартовая рамка.",
     "Не пересказывай документ — используй его как модель мышления для конкретного кейса.",
     "",
     "--- Decision Engine ---",
@@ -210,6 +231,30 @@ function buildSystemPrompt(decisionEngine: string): string {
     ANALYSIS_JSON_SCHEMA,
     "",
     OUTPUT_RULES,
+  ].join("\n");
+}
+
+function buildContinueSystemPrompt(decisionEngine: string): string {
+  return [
+    "Ты — модуль принятия решений Family Office Brain. Применяй Decision Engine из документа ниже.",
+    "Сначала рассуждай от текущего кейса; принципы и паттерны из базы знаний — только для калибровки (шаг 4), не как стартовая рамка.",
+    "Не пересказывай документ — используй его как модель мышления для конкретного кейса.",
+    "",
+    "--- Decision Engine ---",
+    decisionEngine,
+    "--- конец Decision Engine ---",
+    "",
+    THINKING_ORDER,
+    "",
+    PRINCIPLE_FEW_SHOT,
+    "",
+    "Верни только валидный JSON без markdown-обёртки.",
+    "Формат ответа:",
+    CONTINUE_ANALYSIS_JSON_SCHEMA,
+    "",
+    OUTPUT_RULES,
+    "",
+    CASE_MEMORY_RULES,
   ].join("\n");
 }
 
@@ -256,6 +301,15 @@ function buildContinueUserPrompt(input: ContinueAnalysisInput): string {
     "Исходные факты кейса:",
     input.facts.trim(),
     "",
+    "Текущий Main Decision Fork в разборе (до этого сообщения):",
+    input.currentFork?.trim() || "(не определён)",
+    "",
+    "Текущий Determining Fact в разборе (до этого сообщения):",
+    input.currentDeterminingFact?.trim() || "(не определён)",
+    "",
+    "Накопленная память кейса (подтверждённые факты, открытые неизвестности, ограничения):",
+    input.caseMemory.trim() || "(пока пусто — создай начальную память из исходных фактов и переписки)",
+    "",
     "История переписки:",
   ];
 
@@ -270,9 +324,14 @@ function buildContinueUserPrompt(input: ContinueAnalysisInput): string {
     "Новое сообщение руководителя FO:",
     input.newMessage.trim(),
     "",
-    "Обнови весь разбор (все пять секций и priority) с учётом всей истории и нового сообщения.",
+    "Обнови весь разбор (все пять секций, priority, factCheck и caseMemory) с учётом памяти кейса, истории и нового сообщения.",
     "Если новое сообщение меняет или обесценивает более ранний Main Decision Fork или Determining Fact — замени их новой формулировкой, а не повторяй прежнюю по инерции.",
+    "Если новое сообщение прямо отвечает на текущий Determining Fact (подтверждает или опровергает его) — Determining Fact обязан смениться на следующий по значимости недостающий факт, а не остаться прежним.",
+    "Не возвращайся к формулировке Main Decision Fork или Determining Fact, которая уже была заменена в более раннем сообщении из истории — если текущая версия выше уже сдвинулась вперёд по сравнению с началом переписки, не откатывай её назад к более ранней версии без явной новой причины.",
+    "factCheck.contradictsEarlier — сравни новое сообщение с «Исходными фактами кейса» и историей переписки выше: противоречит ли оно прямо чему-то, что уже было утверждено ранее. Если да — верни true и заполни note одним предложением: что именно противоречит и какую версию ты учитываешь дальше и почему. Если прямого противоречия нет — верни false и пустую note.",
     "Обязательно верни reply — короткий ответ именно на новое сообщение руководителя FO (1–3 предложения).",
+    "Обязательно верни обновлённый caseMemory — сохрани ранее подтверждённые факты из текущей памяти, если новое сообщение их не отменяет.",
+    "Перед тем как финализировать reply, Main Decision Fork и Determining Fact — сверь их с каждым пунктом накопленной памяти кейса (caseMemory) выше. Если твой ответ подразумевает вину, ответственность или ожидание действия от стороны (подрядчика, роли, лица), про которую в памяти кейса уже зафиксирован противоположный факт (например, что эта сторона не виновата, её работы выполнены качественно, претензий к ней нет) — это ошибка: не упоминай эту сторону как источник ответственности, перепроверь, к кому по факту относится вопрос или развилка, и ответь в соответствии с caseMemory, а не вопреки ему.",
   );
 
   return lines.join("\n");
@@ -281,7 +340,10 @@ function buildContinueUserPrompt(input: ContinueAnalysisInput): string {
 type OpenAIAnalysisResponse = {
   result: AnalysisResult;
   usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+  caseMemory: string;
 };
+
+type OpenAIContinueAnalysisResponse = OpenAIAnalysisResponse;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -354,7 +416,17 @@ async function callOpenAIAnalysis(
   }
 
   warnIfActionsTruncated(parsed);
-  return { result: normalizeAnalysisResult(parsed), usage };
+  const result = normalizeAnalysisResult(parsed);
+  const factCheck = parseFactCheck(parsed);
+  if (factCheck?.contradictsEarlier && factCheck.note) {
+    console.info("[analysis] factCheck flagged a contradiction:", factCheck.note);
+    result.reply = result.reply ? `${factCheck.note} ${result.reply}` : factCheck.note;
+  }
+  return {
+    result,
+    usage,
+    caseMemory: parseCaseMemory(parsed),
+  };
 }
 
 function buildAnalysisSystemPrompt(): string {
@@ -363,14 +435,21 @@ function buildAnalysisSystemPrompt(): string {
   return systemPrompt;
 }
 
+function buildContinueAnalysisSystemPrompt(): string {
+  const systemPrompt = buildContinueSystemPrompt(loadAnalysisPromptContext());
+  console.info(`[analysis] system prompt length: ${systemPrompt.length} chars`);
+  return systemPrompt;
+}
+
 /** Calls OpenAI and returns normalized AnalysisResult with token usage. */
 export async function generateAnalysisWithAI(input: AnalysisInput): Promise<OpenAIAnalysisResponse> {
-  return callOpenAIAnalysis(buildAnalysisSystemPrompt(), buildUserPrompt(input));
+  const { result, usage } = await callOpenAIAnalysis(buildAnalysisSystemPrompt(), buildUserPrompt(input));
+  return { result, usage, caseMemory: "" };
 }
 
 /** Continues analysis with conversation history and a new principal message. */
 export async function continueAnalysisWithAI(
   input: ContinueAnalysisInput,
-): Promise<OpenAIAnalysisResponse> {
-  return callOpenAIAnalysis(buildAnalysisSystemPrompt(), buildContinueUserPrompt(input));
+): Promise<OpenAIContinueAnalysisResponse> {
+  return callOpenAIAnalysis(buildContinueAnalysisSystemPrompt(), buildContinueUserPrompt(input));
 }

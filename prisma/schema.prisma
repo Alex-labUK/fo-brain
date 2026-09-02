@@ -109,6 +109,7 @@ model Case {
   priorityUrgency String?
   priorityStake   String?
   priorityNote    String?
+  caseMemory      String     @default("")
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 

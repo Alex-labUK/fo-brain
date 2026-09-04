@@ -19,7 +19,8 @@
     "test:analysis": "tsx src/core/orchestration/analysis-stub.test.ts && tsx src/core/orchestration/analysis-resolution.test.ts && tsx src/core/orchestration/analysis-fork-fact.test.ts && tsx src/core/orchestration/analysis-past-fact.test.ts && tsx src/core/orchestration/analysis-fork-repair.test.ts && tsx src/core/orchestration/analysis-previous-cycle.test.ts",
     "test:execution": "tsx src/lib/case-execution.test.ts && tsx src/lib/case-lifecycle.test.ts",
     "test:reopen": "tsx src/lib/decision-cycle.test.ts",
-    "test": "npm run test:analysis && npm run test:proposals && npm run test:execution && npm run test:reopen",
+    "test:dashboard": "tsx src/lib/case-dashboard.test.ts",
+    "test": "npm run test:analysis && npm run test:proposals && npm run test:execution && npm run test:reopen && npm run test:dashboard",
     "postinstall": "prisma generate"
   },
   "prisma": {

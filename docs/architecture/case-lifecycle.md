@@ -123,6 +123,17 @@ AI analysis and dialogue updates must still never persist `lifecycleState`, `blo
 6. An AI lifecycle suggestion is advisory until a human applies it through `updateCaseLifecycle`.
 7. `decisionStatus` on `AnalysisResult` is not a lifecycle field. A resolved decision may still be `executing`.
 8. AI must not write execution fields. A resolved decision is not an execution step, and a completed step is not case closure.
+9. A closed case does not auto-reopen. `resolved → unresolved` after closure is a new decision cycle: archive the previous cycle first, then show a human-only reopen recommendation.
+
+---
+
+## Reopen / new decision cycle
+
+If a closed, resolved case later receives a genuine new uncertainty, the Decision Engine may set `decisionStatus` back to `unresolved`. Lifecycle stays `closed` until a human applies «возобновить кейс».
+
+The previous resolved analysis and completed execution are copied into `Case.decisionCycleHistory` **before** `analysisResult` is overwritten. Apply then moves lifecycle via `updateCaseLifecycle` and clears the *active* execution fields. History is not deleted.
+
+See `docs/architecture/case-execution.md`.
 
 ---
 

@@ -12,6 +12,11 @@ import {
   storedLifecycleSuggestionAfterClose,
 } from "@/lib/case-lifecycle";
 import { closedLifecycleFromExecution, normalizeExecutionWrite } from "@/lib/case-execution";
+import {
+  dismissStoredReopenSuggestion,
+  parseStoredReopenSuggestion,
+  reopenLifecycleUpdate,
+} from "@/lib/decision-cycle";
 import { prisma } from "@/lib/prisma";
 
 function revalidateCasePaths(id: string): void {
@@ -304,4 +309,64 @@ export async function clearCaseExecution(id: string): Promise<void> {
 export async function closeCaseAfterExecution(id: string): Promise<void> {
   const closed = closedLifecycleFromExecution();
   await updateCaseLifecycle(id, closed);
+}
+
+/** Human-only. Archives were already written when analysis became unresolved. */
+export async function applyReopenSuggestion(id: string): Promise<void> {
+  const caseItem = await prisma.case.findUnique({
+    where: { id },
+    select: { id: true, lifecycleState: true, reopenSuggestion: true },
+  });
+
+  if (!caseItem) {
+    throw new Error("Кейс не найден");
+  }
+
+  if (caseItem.lifecycleState !== "closed") {
+    return;
+  }
+
+  const stored = parseStoredReopenSuggestion(caseItem.reopenSuggestion);
+  if (!stored || stored.dismissed) {
+    return;
+  }
+
+  const next = reopenLifecycleUpdate(stored);
+  await updateCaseLifecycle(id, next);
+
+  await prisma.case.update({
+    where: { id },
+    data: {
+      executionStep: null,
+      executionOwner: null,
+      executionStatus: null,
+      executionUpdatedAt: new Date(),
+      reopenSuggestion: { ...stored, dismissed: true },
+    },
+  });
+  revalidateCasePaths(id);
+}
+
+export async function dismissReopenSuggestion(id: string): Promise<void> {
+  const caseItem = await prisma.case.findUnique({
+    where: { id },
+    select: { id: true, lifecycleState: true, reopenSuggestion: true },
+  });
+
+  if (!caseItem) {
+    throw new Error("Кейс не найден");
+  }
+
+  const dismissed = dismissStoredReopenSuggestion(caseItem.reopenSuggestion);
+  if (!dismissed) {
+    return;
+  }
+
+  await prisma.case.update({
+    where: { id },
+    data: {
+      reopenSuggestion: dismissed,
+    },
+  });
+  revalidateCasePaths(id);
 }

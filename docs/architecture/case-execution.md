@@ -81,3 +81,5 @@ If later evidence makes `decisionStatus` `unresolved` while a **pending** step i
 - show «Решение изменилось. Текущий шаг требует пересмотра.»
 
 The human edits or clears it.
+
+If the case was already **closed** and execution **completed**, a material new fact does not auto-reopen lifecycle. The previous cycle is archived to `decisionCycleHistory` before the new analysis is stored. A compact «возобновить кейс» recommendation appears. Human Apply uses `updateCaseLifecycle` and then clears the active execution fields so the old completed step is not the current step. «Оставить закрытым» only dismisses that recommendation.

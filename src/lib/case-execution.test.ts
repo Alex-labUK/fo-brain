@@ -172,7 +172,6 @@ const aiPaths = [
   "src/core/orchestration/analysis-generate.ts",
   "src/core/orchestration/analysis-fallback.ts",
   "src/core/orchestration/lifecycle-suggestion.ts",
-  "src/app/cases/[id]/dialogue-actions.ts",
   "src/app/analyze/actions.ts",
 ];
 for (const relative of aiPaths) {
@@ -185,5 +184,15 @@ for (const relative of aiPaths) {
     `B: ${relative} must not write execution fields`,
   );
 }
+
+const dialogueSource = readFileSync(path.join(root, "src/app/cases/[id]/dialogue-actions.ts"), "utf8");
+const caseUpdateBlock = dialogueSource.slice(dialogueSource.indexOf("const caseUpdate"));
+assert(
+  !/\bexecutionStep\b/.test(caseUpdateBlock) &&
+    !/\bexecutionOwner\b/.test(caseUpdateBlock) &&
+    !/\bexecutionStatus\b/.test(caseUpdateBlock) &&
+    !/\bexecutionUpdatedAt\b/.test(caseUpdateBlock),
+  "B: dialogue analysis must not write Case execution fields",
+);
 
 console.log("Case execution test passed.");

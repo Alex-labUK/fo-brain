@@ -9,6 +9,7 @@ import { CaseExecutionPanel } from "@/app/cases/[id]/CaseExecutionPanel";
 import { CaseExecutionSuggestionCard } from "@/app/cases/[id]/CaseExecutionSuggestionCard";
 import { CaseLifecyclePanel } from "@/app/cases/[id]/CaseLifecyclePanel";
 import { CaseLifecycleSuggestionCard } from "@/app/cases/[id]/CaseLifecycleSuggestionCard";
+import { CaseReopenSuggestionCard } from "@/app/cases/[id]/CaseReopenSuggestionCard";
 import { CollapsibleCaseBlock } from "@/app/cases/[id]/CollapsibleCaseBlock";
 import { decisionStatusLabel, normalizeAnalysisResult } from "@/core/orchestration/analysis-core";
 import { visibleLifecycleSuggestion } from "@/lib/case-lifecycle";
@@ -18,6 +19,7 @@ import {
   hasStoredExecution,
   isExecutionStatus,
 } from "@/lib/case-execution";
+import { parseDecisionCycleHistory, visibleReopenSuggestion } from "@/lib/decision-cycle";
 import { ensureSeeded } from "@/lib/ensure-seeded";
 import { formatDomain } from "@/lib/labels";
 import {
@@ -93,6 +95,11 @@ export default async function CaseDetailPage({ params }: PageProps) {
     storedExecution.executionStatus === "completed" &&
     caseItem.lifecycleState !== "closed" &&
     decisionStatus === "resolved";
+  const reopenSuggestion = visibleReopenSuggestion(caseItem.reopenSuggestion, {
+    lifecycleState: caseItem.lifecycleState,
+    analysis: storedAnalysis,
+  });
+  const previousCycleCount = parseDecisionCycleHistory(caseItem.decisionCycleHistory).length;
   const renderedAt = new Date().toISOString();
 
   return (
@@ -157,6 +164,12 @@ export default async function CaseDetailPage({ params }: PageProps) {
           lifecycleUpdatedAt={caseItem.lifecycleUpdatedAt.toISOString()}
           renderedAt={renderedAt}
         />
+        {previousCycleCount > 0 && (
+          <p className="text-xs text-zinc-400">Предыдущих циклов решений: {previousCycleCount}</p>
+        )}
+        {reopenSuggestion && (
+          <CaseReopenSuggestionCard caseId={caseItem.id} suggestion={reopenSuggestion} />
+        )}
         {hasStoredExecution(storedExecution) && storedExecution.executionStatus && storedExecution.executionStep && (
           <CaseExecutionPanel
             caseId={caseItem.id}

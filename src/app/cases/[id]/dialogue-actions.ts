@@ -8,6 +8,13 @@ import { parseDecisionStatus, SECTION_TITLES } from "@/core/orchestration/analys
 import { continueAnalysis } from "@/core/orchestration/analysis-generate";
 import { generateLifecycleSuggestion } from "@/core/orchestration/lifecycle-suggestion";
 import { toStoredLifecycleSuggestion } from "@/lib/case-lifecycle";
+import { isExecutionStatus } from "@/lib/case-execution";
+import {
+  appendDecisionCycle,
+  buildDecisionCycleRecord,
+  nextStoredReopenSuggestion,
+  shouldArchiveResolvedCycle,
+} from "@/lib/decision-cycle";
 import { prisma } from "@/lib/prisma";
 
 const AI_UNAVAILABLE_REPLY =
@@ -39,6 +46,14 @@ export async function postCaseMessage(caseId: string, text: string): Promise<voi
       lifecycleState: true,
       blockerType: true,
       blockerNote: true,
+      lifecycleUpdatedAt: true,
+      lifecycleSuggestion: true,
+      executionStep: true,
+      executionOwner: true,
+      executionStatus: true,
+      executionUpdatedAt: true,
+      decisionCycleHistory: true,
+      reopenSuggestion: true,
     },
   });
 
@@ -90,18 +105,46 @@ export async function postCaseMessage(caseId: string, text: string): Promise<voi
       "Разбор обновлён.";
 
     const persistedCaseMemory = run.updatedCaseMemory?.trim() || caseItem.caseMemory;
+    const nextDecisionStatus = parseDecisionStatus(run.result);
     const dialogue: ConversationTurn[] = priorMessages.map((message) => ({
       role: message.role as ConversationTurn["role"],
       content: message.content,
     }));
-    const lifecycleSuggestion = await generateLifecycleSuggestion({
+
+    const lifecycleSuggestion =
+      caseItem.lifecycleState === "closed"
+        ? null
+        : await generateLifecycleSuggestion({
+            lifecycleState: caseItem.lifecycleState,
+            blockerType: caseItem.blockerType,
+            blockerNote: caseItem.blockerNote,
+            caseMemory: persistedCaseMemory,
+            facts: caseItem.facts,
+            analysis: run.result,
+            dialogue,
+          });
+
+    const archivedHistory = shouldArchiveResolvedCycle(currentDecisionStatus, nextDecisionStatus)
+      ? appendDecisionCycle(
+          caseItem.decisionCycleHistory,
+          buildDecisionCycleRecord({
+            analysis: caseItem.analysisResult,
+            execution: {
+              executionStep: caseItem.executionStep,
+              executionOwner: caseItem.executionOwner,
+              executionStatus: isExecutionStatus(caseItem.executionStatus) ? caseItem.executionStatus : null,
+            },
+            executionUpdatedAt: caseItem.executionUpdatedAt,
+            closedAt: caseItem.lifecycleState === "closed" ? caseItem.lifecycleUpdatedAt : null,
+          }),
+        )
+      : null;
+
+    const reopenSuggestion = nextStoredReopenSuggestion({
       lifecycleState: caseItem.lifecycleState,
-      blockerType: caseItem.blockerType,
-      blockerNote: caseItem.blockerNote,
-      caseMemory: persistedCaseMemory,
-      facts: caseItem.facts,
-      analysis: run.result,
-      dialogue,
+      previousDecisionStatus: currentDecisionStatus,
+      nextAnalysis: run.result,
+      previousStored: caseItem.reopenSuggestion,
     });
 
     const caseUpdate: {
@@ -109,6 +152,8 @@ export async function postCaseMessage(caseId: string, text: string): Promise<voi
       recordedResult: string;
       caseMemory: string;
       lifecycleSuggestion: Prisma.InputJsonValue | typeof Prisma.DbNull;
+      decisionCycleHistory?: Prisma.InputJsonValue;
+      reopenSuggestion: Prisma.InputJsonValue | typeof Prisma.DbNull;
       priorityUrgency?: string | null;
       priorityStake?: string | null;
       priorityNote?: string | null;
@@ -119,7 +164,12 @@ export async function postCaseMessage(caseId: string, text: string): Promise<voi
       lifecycleSuggestion: lifecycleSuggestion
         ? toStoredLifecycleSuggestion(lifecycleSuggestion)
         : Prisma.DbNull,
+      reopenSuggestion: reopenSuggestion ?? Prisma.DbNull,
     };
+
+    if (archivedHistory) {
+      caseUpdate.decisionCycleHistory = archivedHistory as Prisma.InputJsonValue;
+    }
 
     if (run.result.priority) {
       caseUpdate.priorityUrgency = run.result.priority.urgency;

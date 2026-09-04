@@ -18,7 +18,8 @@
     "test:proposals": "tsx src/core/orchestration/draft-subsystem-proposals.test.ts",
     "test:analysis": "tsx src/core/orchestration/analysis-stub.test.ts && tsx src/core/orchestration/analysis-resolution.test.ts",
     "test:execution": "tsx src/lib/case-execution.test.ts && tsx src/lib/case-lifecycle.test.ts",
-    "test": "npm run test:analysis && npm run test:proposals && npm run test:execution",
+    "test:reopen": "tsx src/lib/decision-cycle.test.ts",
+    "test": "npm run test:analysis && npm run test:proposals && npm run test:execution && npm run test:reopen",
     "postinstall": "prisma generate"
   },
   "prisma": {

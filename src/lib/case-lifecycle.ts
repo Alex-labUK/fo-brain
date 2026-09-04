@@ -223,10 +223,30 @@ export function toStoredLifecycleSuggestion(suggestion: LifecycleSuggestion): St
   };
 }
 
+/**
+ * Marks a stored advisory suggestion dismissed so it cannot reappear after
+ * close or later reopen. Returns null when there is nothing parseable to keep.
+ */
+export function storedLifecycleSuggestionAfterClose(raw: unknown): StoredLifecycleSuggestion | null {
+  const stored = parseStoredLifecycleSuggestion(raw);
+  if (!stored) {
+    return null;
+  }
+
+  return {
+    ...stored,
+    dismissed: true,
+  };
+}
+
 export function visibleLifecycleSuggestion(
   raw: unknown,
   current: Pick<LifecycleSnapshot, "lifecycleState" | "blockerNote">,
 ): LifecycleSuggestion | null {
+  if (current.lifecycleState === "closed") {
+    return null;
+  }
+
   const stored = parseStoredLifecycleSuggestion(raw);
   if (!stored || stored.dismissed || !suggestionDiffersFromCurrent(stored, current)) {
     return null;

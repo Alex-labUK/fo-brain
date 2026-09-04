@@ -5,11 +5,19 @@ import { PriorityBadge } from "@/components/PriorityBadge";
 import { CaseStatusBadge } from "@/components/StatusBadge";
 import { CaseDetailControls } from "@/app/cases/[id]/CaseDetailControls";
 import { CaseDialogueLauncher } from "@/app/cases/[id]/CaseDialogueLauncher";
+import { CaseExecutionPanel } from "@/app/cases/[id]/CaseExecutionPanel";
+import { CaseExecutionSuggestionCard } from "@/app/cases/[id]/CaseExecutionSuggestionCard";
 import { CaseLifecyclePanel } from "@/app/cases/[id]/CaseLifecyclePanel";
 import { CaseLifecycleSuggestionCard } from "@/app/cases/[id]/CaseLifecycleSuggestionCard";
 import { CollapsibleCaseBlock } from "@/app/cases/[id]/CollapsibleCaseBlock";
 import { decisionStatusLabel, normalizeAnalysisResult } from "@/core/orchestration/analysis-core";
 import { visibleLifecycleSuggestion } from "@/lib/case-lifecycle";
+import {
+  deriveExecutionSuggestion,
+  executionNeedsReview,
+  hasStoredExecution,
+  isExecutionStatus,
+} from "@/lib/case-execution";
 import { ensureSeeded } from "@/lib/ensure-seeded";
 import { formatDomain } from "@/lib/labels";
 import {
@@ -68,6 +76,24 @@ export default async function CaseDetailPage({ params }: PageProps) {
     lifecycleState: caseItem.lifecycleState,
     blockerNote: caseItem.blockerNote,
   });
+  const storedExecution = {
+    executionStep: caseItem.executionStep,
+    executionOwner: caseItem.executionOwner,
+    executionStatus: isExecutionStatus(caseItem.executionStatus) ? caseItem.executionStatus : null,
+  };
+  const decisionStatus = storedAnalysis?.decisionStatus;
+  const needsReview = executionNeedsReview(decisionStatus, storedExecution);
+  const executionSuggestion = deriveExecutionSuggestion({
+    decisionStatus,
+    lifecycleState: caseItem.lifecycleState,
+    analysis: storedAnalysis,
+    execution: storedExecution,
+  });
+  const showClosePrompt =
+    storedExecution.executionStatus === "completed" &&
+    caseItem.lifecycleState !== "closed" &&
+    decisionStatus === "resolved";
+  const renderedAt = new Date().toISOString();
 
   return (
     <main className="mx-auto w-full max-w-3xl px-6 py-6">
@@ -129,8 +155,23 @@ export default async function CaseDetailPage({ params }: PageProps) {
           blockerType={caseItem.blockerType}
           blockerNote={caseItem.blockerNote}
           lifecycleUpdatedAt={caseItem.lifecycleUpdatedAt.toISOString()}
-          renderedAt={new Date().toISOString()}
+          renderedAt={renderedAt}
         />
+        {hasStoredExecution(storedExecution) && storedExecution.executionStatus && storedExecution.executionStep && (
+          <CaseExecutionPanel
+            caseId={caseItem.id}
+            executionStep={storedExecution.executionStep}
+            executionOwner={storedExecution.executionOwner}
+            executionStatus={storedExecution.executionStatus}
+            executionUpdatedAt={caseItem.executionUpdatedAt?.toISOString() ?? null}
+            renderedAt={renderedAt}
+            needsReview={needsReview}
+            showClosePrompt={showClosePrompt}
+          />
+        )}
+        {executionSuggestion && (
+          <CaseExecutionSuggestionCard caseId={caseItem.id} suggestion={executionSuggestion} />
+        )}
         {lifecycleSuggestion && (
           <CaseLifecycleSuggestionCard caseId={caseItem.id} suggestion={lifecycleSuggestion} />
         )}

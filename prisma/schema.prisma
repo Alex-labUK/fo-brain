@@ -33,6 +33,11 @@ enum CaseBlockerType {
   execution
 }
 
+enum CaseExecutionStatus {
+  pending
+  completed
+}
+
 enum PrincipleStatus {
   candidate
   pattern
@@ -134,6 +139,10 @@ model Case {
   blockerNote        String?
   lifecycleUpdatedAt DateTime           @default(now())
   lifecycleSuggestion Json?
+  executionStep       String?
+  executionOwner      String?
+  executionStatus     CaseExecutionStatus?
+  executionUpdatedAt  DateTime?
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 

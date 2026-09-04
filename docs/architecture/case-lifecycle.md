@@ -1,7 +1,7 @@
 # Case Status and Case Lifecycle
 
-Version: 1.2  
-Status: Stage 3 implementation note, with decision-resolution context  
+Version: 1.3  
+Status: Stage 3 implementation note, with decision-resolution and execution context  
 Path: `docs/architecture/case-lifecycle.md`
 
 ---
@@ -107,6 +107,8 @@ If case memory says the Principal already approved the route, and the latest mes
 
 `Применить` goes through the existing human-controlled `updateCaseLifecycle` path (normalization + explicit `lifecycleUpdatedAt`). `Оставить как есть` only dismisses the visible suggestion.
 
+A closed case never shows this card. `visibleLifecycleSuggestion` returns null while `lifecycleState` is `closed`. Closing (or later reopening) also dismisses the stored JSON so an obsolete pre-closure recommendation cannot reappear. Lifecycle state remains the only source of truth; the suggestion stays advisory.
+
 AI analysis and dialogue updates must still never persist `lifecycleState`, `blockerType`, `blockerNote`, or `lifecycleUpdatedAt`.
 
 ---
@@ -120,3 +122,18 @@ AI analysis and dialogue updates must still never persist `lifecycleState`, `blo
 5. Treat `CaseLifecycleState` as the source of truth for the new case-management flow.
 6. An AI lifecycle suggestion is advisory until a human applies it through `updateCaseLifecycle`.
 7. `decisionStatus` on `AnalysisResult` is not a lifecycle field. A resolved decision may still be `executing`.
+8. AI must not write execution fields. A resolved decision is not an execution step, and a completed step is not case closure.
+
+---
+
+## Execution (Stage 1)
+
+See `docs/architecture/case-execution.md`.
+
+FO Brain is not a task-management system. After a decision is resolved, a case may carry **one current execution step** (`executionStep`, `executionOwner`, `executionStatus`, `executionUpdatedAt`).
+
+```text
+Decision Resolution  →  Execution  →  Completion  →  Human-confirmed Case Closure
+```
+
+These remain separate. Completing the step does not auto-close the case. Closing still goes through `updateCaseLifecycle`. If a resolved decision later becomes unresolved, a pending step stays stored and is marked for human review.

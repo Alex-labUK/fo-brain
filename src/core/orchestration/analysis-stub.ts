@@ -8,6 +8,7 @@ export type {
   AnalysisSection,
   AnalysisSource,
   ConversationTurn,
+  DecisionStatus,
   RoleAssignment,
 } from "@/core/orchestration/analysis-core";
 
@@ -16,13 +17,17 @@ export {
   ANALYSIS_RESULT_STORAGE_KEY,
   FORBIDDEN_PHRASES,
   MAX_ACTIONS,
+  RESOLVED_DETERMINING_FACT,
   SECTION_TITLES,
   collectAnalysisText,
   containsForbiddenPhrase,
   countAnalysisActions,
   countAnalysisCriticalFacts,
+  decisionStatusLabel,
   isForbiddenMainQuestion,
+  isResolvedAnalysis,
   normalizeAnalysisResult,
+  parseDecisionStatus,
 } from "@/core/orchestration/analysis-core";
 
 import type { AnalysisInput, AnalysisResult } from "@/core/orchestration/analysis-core";

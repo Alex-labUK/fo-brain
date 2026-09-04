@@ -1,7 +1,7 @@
 # Case Status and Case Lifecycle
 
-Version: 1.1  
-Status: Stage 3 implementation note  
+Version: 1.2  
+Status: Stage 3 implementation note, with decision-resolution context  
 Path: `docs/architecture/case-lifecycle.md`
 
 ---
@@ -91,7 +91,19 @@ Rules:
 
 `Case.lifecycleSuggestion` stores the latest advisory payload (`state`, optional `blockerNote`, `reason`, `dismissed`). It is overwritten on every successful new analysis so a newer cycle cannot leave a stale recommendation on screen.
 
-The public Decision Engine `AnalysisResult` contract is unchanged. The suggestion is generated in a separate call and transported/stored outside `AnalysisResult`.
+The suggestion is generated in a separate call and transported/stored **outside** `AnalysisResult`. `AnalysisResult` now also carries an additive `decisionStatus` (`unresolved` | `resolved`) used by the Decision Engine. That field is **not** a lifecycle write and must not be copied into `lifecycleState`.
+
+Guidance for the suggestion model (advisory only, not hard-coded):
+
+- `resolved` + agreed actions still underway → `executing`
+- `resolved` + only observation remaining → `monitoring`
+- `resolved` + nothing material remaining → `closed`
+- `unresolved` + Principal decision required → `waiting_for_principal`
+- `unresolved` + fact required → `waiting_for_fact`
+
+A resolved decision is **not** case closure. Example: Principal has decided to complete, all risk questions are resolved, legal completion has not yet occurred → `decisionStatus = resolved`, lifecycle suggestion would normally remain `executing`.
+
+If case memory says the Principal already approved the route, and the latest message does not revoke that, the suggestion must not be `waiting_for_principal` unless a **new** explicit Principal decision is genuinely required.
 
 `Применить` goes through the existing human-controlled `updateCaseLifecycle` path (normalization + explicit `lifecycleUpdatedAt`). `Оставить как есть` only dismisses the visible suggestion.
 
@@ -107,3 +119,4 @@ AI analysis and dialogue updates must still never persist `lifecycleState`, `blo
 4. Persist blocker type from lifecycle state where the mapping is deterministic.
 5. Treat `CaseLifecycleState` as the source of truth for the new case-management flow.
 6. An AI lifecycle suggestion is advisory until a human applies it through `updateCaseLifecycle`.
+7. `decisionStatus` on `AnalysisResult` is not a lifecycle field. A resolved decision may still be `executing`.

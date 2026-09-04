@@ -16,7 +16,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:setup": "prisma migrate dev && tsx prisma/seed.ts",
     "test:proposals": "tsx src/core/orchestration/draft-subsystem-proposals.test.ts",
-    "test:analysis": "tsx src/core/orchestration/analysis-stub.test.ts",
+    "test:analysis": "tsx src/core/orchestration/analysis-stub.test.ts && tsx src/core/orchestration/analysis-resolution.test.ts",
     "test": "npm run test:analysis && npm run test:proposals",
     "postinstall": "prisma generate"
   },

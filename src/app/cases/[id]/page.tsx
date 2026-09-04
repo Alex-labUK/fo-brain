@@ -8,7 +8,7 @@ import { CaseDialogueLauncher } from "@/app/cases/[id]/CaseDialogueLauncher";
 import { CaseLifecyclePanel } from "@/app/cases/[id]/CaseLifecyclePanel";
 import { CaseLifecycleSuggestionCard } from "@/app/cases/[id]/CaseLifecycleSuggestionCard";
 import { CollapsibleCaseBlock } from "@/app/cases/[id]/CollapsibleCaseBlock";
-import { normalizeAnalysisResult } from "@/core/orchestration/analysis-core";
+import { decisionStatusLabel, normalizeAnalysisResult } from "@/core/orchestration/analysis-core";
 import { visibleLifecycleSuggestion } from "@/lib/case-lifecycle";
 import { ensureSeeded } from "@/lib/ensure-seeded";
 import { formatDomain } from "@/lib/labels";
@@ -167,6 +167,9 @@ export default async function CaseDetailPage({ params }: PageProps) {
         {storedAnalysis && (
           <div>
             <h2 className="text-xs font-medium uppercase tracking-wide text-zinc-500">Разбор ИИ</h2>
+            <p className="mt-1 text-xs text-zinc-400">
+              {decisionStatusLabel(storedAnalysis.decisionStatus)}
+            </p>
             <div className="mt-3">
               <AnalysisSections sections={storedAnalysis.sections} />
             </div>

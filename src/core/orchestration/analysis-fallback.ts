@@ -161,6 +161,7 @@ function renderAnalysis(
   actions: string[],
 ): AnalysisResult {
   const result: AnalysisResult = {
+    decisionStatus: "unresolved",
     sections: [
       { title: SECTION_TITLES[0], content: outcome },
       { title: SECTION_TITLES[1], content: fork },

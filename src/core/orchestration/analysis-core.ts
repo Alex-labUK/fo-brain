@@ -19,11 +19,20 @@ export type AnalysisSection = {
   actions?: string[];
 };
 
+export const DECISION_STATUSES = ["unresolved", "resolved"] as const;
+
+export type DecisionStatus = (typeof DECISION_STATUSES)[number];
+
 export type AnalysisResult = {
   sections: AnalysisSection[];
   priority?: AnalysisPriority;
   reply?: string;
+  /** Whether a genuine decision fork still needs a determining fact. */
+  decisionStatus?: DecisionStatus;
 };
+
+export const RESOLVED_DETERMINING_FACT =
+  "Определяющий факт больше не требуется — ключевая неопределённость устранена.";
 
 export type AnalysisSource = "ai" | "fallback";
 
@@ -51,6 +60,7 @@ export type ContinueAnalysisInput = {
   caseMemory: string;
   currentFork?: string;
   currentDeterminingFact?: string;
+  currentDecisionStatus?: DecisionStatus;
 };
 
 export const MAX_CASE_MEMORY_BULLETS = 15;
@@ -194,6 +204,20 @@ export function parseFactCheck(raw: unknown): FactCheck | undefined {
   return { contradictsEarlier, note };
 }
 
+/** Parses decisionStatus from raw AI JSON. Missing/invalid values default to unresolved. */
+export function parseDecisionStatus(raw: unknown): DecisionStatus {
+  if (!isRecord(raw)) return "unresolved";
+  return raw.decisionStatus === "resolved" ? "resolved" : "unresolved";
+}
+
+export function isResolvedAnalysis(result: Pick<AnalysisResult, "decisionStatus">): boolean {
+  return result.decisionStatus === "resolved";
+}
+
+export function decisionStatusLabel(status: DecisionStatus | undefined): string {
+  return status === "resolved" ? "Решение определено" : "Решение ещё не определено";
+}
+
 /** Parses optional reply from raw AI JSON. */
 export function parseAnalysisReply(raw: unknown): string | undefined {
   if (!isRecord(raw)) return undefined;
@@ -238,17 +262,22 @@ export function normalizeAnalysisResult(raw: unknown): AnalysisResult {
   const outcome = requireContent(byTitle.get(SECTION_TITLES[0]), SECTION_TITLES[0]);
   const fork = requireContent(byTitle.get(SECTION_TITLES[1]), SECTION_TITLES[1]);
   const determiningFact = requireContent(byTitle.get(SECTION_TITLES[2]), SECTION_TITLES[2]);
+  const decisionStatus = parseDecisionStatus(raw);
 
-  const roleAssignments = parseRoleAssignments(byTitle.get(SECTION_TITLES[3])?.roleAssignments);
-  if (roleAssignments.length === 0) throw new Error("Missing fact sources");
-
+  const parsedAssignments = parseRoleAssignments(byTitle.get(SECTION_TITLES[3])?.roleAssignments);
   const actions = parseActions(byTitle.get(SECTION_TITLES[4])?.actions);
-  if (actions.length === 0) throw new Error("Missing actions to obtain the fact");
+  const roleAssignments = decisionStatus === "resolved" ? [] : parsedAssignments;
+
+  if (decisionStatus === "unresolved") {
+    if (roleAssignments.length === 0) throw new Error("Missing fact sources");
+    if (actions.length === 0) throw new Error("Missing actions to obtain the fact");
+  }
 
   const priority = parseAnalysisPriority(isRecord(raw) ? raw.priority : undefined);
   const reply = parseAnalysisReply(raw);
 
   const result: AnalysisResult = {
+    decisionStatus,
     sections: [
       { title: SECTION_TITLES[0], content: outcome },
       { title: SECTION_TITLES[1], content: fork },

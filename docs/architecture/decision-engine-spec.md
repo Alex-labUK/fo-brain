@@ -1,8 +1,10 @@
 # Family Office Brain — Decision Engine Specification
 
-Version: 1.1  
+Version: 1.2  
 Status: Normative  
 Path: `docs/architecture/decision-engine-spec.md`
+
+Changelog from v1.1: added `decisionStatus` (`unresolved` | `resolved`). An analysis may now terminate the decision fork when the relevant uncertainty is gone, without inventing a new Determining Fact to preserve the five-section shape. Resolved is not case closure: execution may continue after the decision is determined.
 
 Changelog from v1.0 (external draft): reconciled with the shipped product. Route Change is now an internal-only reasoning step, never rendered to the user. The public output contract now matches what is actually implemented (5 sections + Priority + Reply), not a hypothetical 6-section contract. Authority Model cross-references the calibration findings already validated in `decision-engine.md` instead of re-deriving them. Learning Contract is marked explicitly as a manual process, not an automated one.
 
@@ -33,11 +35,15 @@ The knowledge base — historical cases, validated principles, decision question
 
 ### 2.1. One case — one main decision fork
 
-Every analysis must identify one main fork. If several forks appear equally important, the engine has not yet found the real decision point.
+Every **unresolved** analysis must identify one main fork. If several forks appear equally important, the engine has not yet found the real decision point.
+
+When the decision is **resolved**, do not fabricate a new binary fork. Keep the Main Decision Fork section, but fill it with a concise resolution statement (for example: «Решение определено: завершить сделку в согласованный срок.»).
 
 ### 2.2. One fork — one determining fact
 
-Every main fork must be resolved by one determining fact — the first confirmed fact after which at least one decision route becomes impossible.
+Every **unresolved** main fork must be resolved by one determining fact — the first confirmed fact after which at least one decision route becomes impossible.
+
+A determining fact is required **only while a genuine decision fork remains**. When the relevant uncertainty is gone, do not invent a new fact, and do not treat “no new circumstances” as a Determining Fact.
 
 ### 2.3. Questions exist only to obtain the determining fact
 
@@ -63,6 +69,17 @@ Every analysis must be tied to the desired outcome.
 
 The engine must not make irreversible, value-based, or high-authority decisions on behalf of the Principal. See §6 for the full authority model.
 
+### 2.9. Decision resolution is not case closure
+
+`decisionStatus` answers whether a genuine choice still needs a determining fact. It does **not** answer whether the case is operationally finished.
+
+- `unresolved` — a real decision fork still exists and at least one determining fact is still needed.
+- `resolved` — the relevant uncertainty has been sufficiently resolved, the route is clear, and no additional determining fact is required before acting.
+
+A decision can be resolved while the case is still executing. Example: the Principal has decided to buy, all risk questions are resolved, but legal completion has not yet occurred. Decision = resolved. Lifecycle may still be `executing`.
+
+The engine must not invent new uncertainty merely to preserve the five-section output structure. It must not ask to reconfirm facts already recorded in case memory unless the user explicitly says circumstances changed. If case memory says the Principal already approved the route, the engine must not pretend a Principal decision is still pending.
+
 ---
 
 ## 3. Decision Flow
@@ -74,22 +91,29 @@ Input
   ↓
 2. Define the desired outcome            → public: Outcome
   ↓
+2a. Resolution check (internal)          → public: decisionStatus
+  ↓
 3. Identify the main decision fork       → public: Main Decision Fork
+     (or a resolution statement if resolved)
   ↓
 4. Identify the determining fact         → public: Determining Fact
+     (or the terminal “no further fact required” value if resolved)
   ↓
 5. Identify the fact owner               → public: Who can confirm this fact?
+     (omitted / empty if resolved)
   ↓
 6. Define the minimum actions            → public: How do we obtain this fact?
+     (unresolved: fact-gathering; resolved: execution steps only)
   ↓
 7. Check how the route would change      → INTERNAL ONLY, not rendered (see §4.7)
+     (skip when resolved)
   ↓
 8. Compute Priority + Reply              → public: Priority, Reply
   ↓
 9. Stop and wait for new evidence
 ```
 
-Steps 2–6 and 8 map directly onto the current `AnalysisResult` shape (`sections[0..4]`, `priority`, `reply`). Step 7 is new discipline, not a new visible field.
+Steps 2–6 and 8 map directly onto the current `AnalysisResult` shape (`decisionStatus`, `sections[0..4]`, `priority`, `reply`). Step 2a is prompt discipline plus a stored field; it is not a new card. Step 7 is new discipline, not a new visible field.
 
 ---
 
@@ -112,48 +136,76 @@ Rules:
 
 Output: one desired outcome — a state to be achieved, not an action.
 
-Renders as section "🎯 Outcome".
+Renders as section "🎯 Outcome". Keep the current outcome when the analysis becomes resolved.
+
+### 4.2a. Resolution check (internal, then `decisionStatus`)
+
+Before forcing a new Main Decision Fork / Determining Fact, the model must ask internally:
+
+- Is there still a genuine unresolved choice?
+- Is there still a fact whose confirmation would change the route?
+- Has the Principal decision already been made (facts + caseMemory)?
+- Are the requested facts already confirmed in caseMemory / current facts?
+- Is the case now simply executing an already-determined route?
+
+If no genuine unresolved decision remains, set `decisionStatus = resolved`. Missing or invalid `decisionStatus` in stored JSON defaults to `unresolved`, so older analyses keep the previous five-section rules.
+
+Do not confuse resolved decision with closed case. Lifecycle suggestion may receive `decisionStatus` as advisory context; the engine must not auto-apply lifecycle.
 
 ### 4.3. Identify the Main Decision Fork
 
-Output: one concrete, case-specific fork that creates materially different routes.
+Output:
 
-Renders as section "🌳 Main Decision Fork".
+- unresolved — one concrete, case-specific fork that creates materially different routes;
+- resolved — a concise resolution statement, not a fabricated binary fork.
+
+Renders as section "🌳 Main Decision Fork". The section stays even when resolved, because the existing UI expects it.
 
 ### 4.4. Identify the Determining Fact
 
-Output: one determining fact — confirmable or disprovable, not a recommendation, not a list, not a document name.
+Output:
+
+- unresolved — one determining fact — confirmable or disprovable, not a recommendation, not a list, not a document name;
+- resolved — a terminal value such as «Определяющий факт больше не требуется — ключевая неопределённость устранена.»
 
 Renders as section "🔑 Determining Fact".
 
 ### 4.5. Identify the Fact Owner
 
-Output: one primary fact owner, and only if essential, one supporting owner.
+Output:
 
-Renders as section "👤 Who can confirm this fact?".
+- unresolved — one primary fact owner, and only if essential, one supporting owner;
+- resolved — empty. Do not invent a fact owner.
+
+Renders as section "👤 Who can confirm this fact?". The UI may omit the section when it has no role assignments.
 
 Rules:
 
 - Do not assign a role merely because it is usually involved.
 - Do not activate Legal unless a legal fact is actually required.
+- Do not ask a lawyer or expert to reconfirm a fact already recorded in caseMemory unless the user explicitly says circumstances changed.
 
 ### 4.6. Define Minimum Actions
 
-Output: the minimum actions required to obtain the fact.
+Output:
 
-Renders as section "📋 How do we obtain this fact?".
+- unresolved — the minimum actions required to obtain the fact;
+- resolved — only real next execution step(s), not information-gathering. Example: «Завершить сделку в согласованный срок.» If nothing material remains to execute, the list may be empty.
+
+Renders as section "📋 How do we obtain this fact?". The UI may omit the section when the list is empty.
 
 Rules:
 
 - **Maximum four actions.** Enforce as a soft prompt constraint; if the model returns more than four, the UI may truncate to four and log a warning (do not silently drop — see honesty discipline in §7).
-- Every action must contribute directly to confirming or disproving the determining fact.
+- Unresolved: every action must contribute directly to confirming or disproving the determining fact.
+- Resolved: actions must not re-collect already confirmed facts.
 - No general due diligence, no "nice to know" questions.
 
 This constraint exists specifically to fight the vague, unfocused output the team hit in production (the "England estate" incident, where fallback output masqueraded as analysis and — separately — even real AI output sometimes rambled without a clear determining fact). A hard cap forces sharper output.
 
 ### 4.7. Internal Route-Change Check — reasoning only, never rendered
 
-This stage exists **for the model's own reasoning quality, not for the user.** Before finalizing the Determining Fact, the model should internally check: if this fact is confirmed, what becomes impossible? If disproved? If it cannot be established in time? A determining fact that doesn't cleanly split into at least two of these is probably not sharp enough, and the model should revise steps 4.4–4.6 before responding.
+This stage exists **for the model's own reasoning quality, not for the user.** It applies only while `decisionStatus = unresolved`. Before finalizing the Determining Fact, the model should internally check: if this fact is confirmed, what becomes impossible? If disproved? If it cannot be established in time? A determining fact that doesn't cleanly split into at least two of these is probably not sharp enough, and the model should revise steps 4.4–4.6 before responding.
 
 **This must not be exposed as a rendered section, a UI element, or explanatory text in the chat reply.** The user explicitly rejected this ("факт-подтверждён, факт-опровергнут — не нужен этот блок") when it was a visible six-section block, and that decision stands for anything user-facing.
 
@@ -161,27 +213,31 @@ Implementation: may optionally be persisted as an internal field on the stored `
 
 ### 4.8. Stop and Wait
 
-After presenting the current cycle (Outcome, Fork, Determining Fact, Fact Owner, Actions, Priority, Reply), the engine stops. When the user sends a new message in the case dialogue, the analysis cycle restarts from §4.1 with the new message as fresh evidence — this already matches how `continueAnalysisWithAI` works today.
+After presenting the current cycle (decisionStatus, Outcome, Fork, Determining Fact, Fact Owner, Actions, Priority, Reply), the engine stops. When the user sends a new message in the case dialogue, the analysis cycle restarts from §4.1 with the new message as fresh evidence — this already matches how `continueAnalysisWithAI` works today.
+
+If the new message answers the current Determining Fact **and** a genuine next fork remains, move to that next fact. If no genuine next fork remains, set `decisionStatus = resolved` instead of inventing the next fact.
 
 ---
 
 ## 5. Output Contract (public — what the user actually sees)
 
 ```text
+0. decisionStatus (unresolved | resolved) — compact label only, not a new card
 1. Outcome
-2. Main Decision Fork
-3. Determining Fact
-4. Who can confirm this fact?
-5. How do we obtain this fact?
+2. Main Decision Fork   (fork while unresolved; resolution statement while resolved)
+3. Determining Fact     (missing fact while unresolved; terminal value while resolved)
+4. Who can confirm this fact?  (required while unresolved; omitted while resolved)
+5. How do we obtain this fact? (fact-gathering while unresolved; execution steps or empty while resolved)
 6. Priority (urgency / stake / note → traffic-light color)
 7. Reply (short, 1–3 sentence natural-language message for the case chat)
 ```
 
-This is the real, shipped contract — 5 analysis sections plus Priority and Reply. It differs from a hypothetical "6-section" contract that includes a visible Route Change block: that block is internal only (§4.7), never public.
+This is the real, shipped contract — 5 analysis sections plus Priority, Reply, and an additive `decisionStatus` on `AnalysisResult`. It differs from a hypothetical "6-section" contract that includes a visible Route Change block: that block is internal only (§4.7), never public. Older stored JSON without `decisionStatus` is treated as `unresolved`.
 
 Required limits:
 
-- one outcome; one fork; one determining fact; one primary fact owner; maximum four actions.
+- unresolved: one outcome; one fork; one determining fact; one primary fact owner; maximum four actions;
+- resolved: one outcome; resolution statement instead of a fork; no invented determining fact; no fact owner; execution actions only (may be empty).
 
 Forbidden output (unchanged from the general discipline already in place):
 
@@ -253,12 +309,14 @@ For every closed case, the ideal capture is:
 
 An analysis passes only if:
 
-- there is one outcome, one main fork, one determining fact;
-- the fact removes at least one route when confirmed;
-- the fact owner can actually confirm it;
-- every action contributes directly to obtaining the fact (max 4);
+- `decisionStatus` is `unresolved` or `resolved`, and matches whether a genuine fork remains;
+- unresolved: there is one outcome, one main fork, one determining fact;
+- unresolved: the fact removes at least one route when confirmed;
+- unresolved: the fact owner can actually confirm it;
+- unresolved: every action contributes directly to obtaining the fact (max 4);
+- resolved: the engine did not invent a new uncertainty, a fake Principal wait, or a reconfirmation of an already-known fact;
 - no causal statement is presented without evidence;
-- the internal route-change check (§4.7) was performed, even though it is never rendered;
+- the internal route-change check (§4.7) was performed when unresolved, even though it is never rendered;
 - authority boundaries (§6) are respected in the Reply text — the engine must not casually recommend an action that §6 would require escalating.
 
 ---
@@ -286,10 +344,12 @@ The Decision Engine is not:
 
 ---
 
-## 13. Definition of Done for v1.1
+## 13. Definition of Done for v1.2
 
-- This specification is checked into `docs/architecture/decision-engine-spec.md`.
-- The output contract in §5 matches the actual `AnalysisResult` shape (5 sections + priority + reply) — no code changes required for this alone, since it already matches.
-- The max-four-actions constraint (§4.6) is reflected in the system prompt, with a truncate-and-warn fallback in code if violated.
-- The internal route-change check (§4.7) is reflected in the system prompt as a reasoning instruction; persisting it as a field is optional and, if done, is never read by any UI component.
+- `AnalysisResult` stores additive `decisionStatus`: `unresolved` | `resolved`. Missing values default to `unresolved`.
+- Unresolved analyses keep the previous five-section rules (fork + determining fact + sources + fact-gathering actions).
+- Resolved analyses keep Outcome, use a resolution statement in Main Decision Fork, do not invent a Determining Fact, omit fact owners, and allow execution-only (or empty) actions.
+- Continue-analysis must not force a “next determining fact” when no genuine fork remains.
+- Lifecycle suggestion may read `decisionStatus` as guidance only. AI still must not write lifecycle fields.
+- Compact UI may show «Решение определено» / «Решение ещё не определено». No new analysis card.
 - `decision-engine.md` and `seed-data.json` are untouched by this change.

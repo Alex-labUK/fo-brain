@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import type { CaseBlockerType, CaseLifecycleState } from "@prisma/client";
-import type { AnalysisResult, ConversationTurn } from "@/core/orchestration/analysis-core";
+import type { AnalysisResult, ConversationTurn, DecisionStatus } from "@/core/orchestration/analysis-core";
 import { SECTION_TITLES } from "@/core/orchestration/analysis-core";
 import {
   lifecycleLabel,
@@ -32,7 +32,7 @@ function sectionActions(analysis: AnalysisResult): string[] {
   return analysis.sections.find((section) => section.title === SECTION_TITLES[4])?.actions ?? [];
 }
 
-function buildSystemPrompt(): string {
+export function buildLifecycleSuggestionSystemPrompt(): string {
   return [
     "Ты советуешь руководителю Family Office, в каком состоянии жизненного цикла сейчас находится кейс.",
     "Это только рекомендация. Ты не меняешь состояние кейса и не принимаешь решений.",
@@ -50,8 +50,17 @@ function buildSystemPrompt(): string {
     "Главное различение: Determining Fact ≠ lifecycle blocker.",
     "Determining Fact — какой факт определит маршрут анализа.",
     "Lifecycle — где кейс находится операционно прямо сейчас.",
+    "decisionStatus разбора ≠ закрытие кейса.",
     "Пример: если определяющий факт появится только после того, как подрядчик выполнит уже согласованный ремонт, текущее состояние скорее executing, а не waiting_for_fact.",
     "",
+    "Учитывай decisionStatus разбора, но не копируй его в lifecycle:",
+    "- resolved + согласованные действия ещё идут → executing",
+    "- resolved + осталось только наблюдение → monitoring",
+    "- resolved + не осталось материального шага → closed",
+    "- unresolved + нужно решение принципала → waiting_for_principal",
+    "- unresolved + нужен факт → waiting_for_fact",
+    "",
+    "Если в памяти кейса принципал уже принял решение по маршруту, а новое сообщение это не отменяет — не предлагай waiting_for_principal.",
     "Не предлагай closed, пока есть решение, блокер, исполнение или потребность в мониторинге.",
     "Не предлагай waiting_for_fact только потому, что в разборе есть Determining Fact.",
     "blockerNote пиши по-русски, коротко и конкретно: чего ждём или что должно быть сделано.",
@@ -63,11 +72,12 @@ function buildSystemPrompt(): string {
   ].join("\n");
 }
 
-function buildUserPrompt(input: LifecycleSuggestionInput): string {
+export function buildLifecycleSuggestionUserPrompt(input: LifecycleSuggestionInput): string {
   const fork = sectionContent(input.analysis, SECTION_TITLES[1]);
   const determiningFact = sectionContent(input.analysis, SECTION_TITLES[2]);
   const actions = sectionActions(input.analysis);
   const reply = input.analysis.reply?.trim() || "";
+  const decisionStatus: DecisionStatus = input.analysis.decisionStatus ?? "unresolved";
   const dialogue = (input.dialogue ?? [])
     .slice(-8)
     .map((turn) => `${turn.role}: ${turn.content}`)
@@ -77,6 +87,7 @@ function buildUserPrompt(input: LifecycleSuggestionInput): string {
     `Текущее состояние: ${input.lifecycleState} (${lifecycleLabel(input.lifecycleState)})`,
     `Текущий blockerType: ${input.blockerType}`,
     `Текущая blockerNote: ${input.blockerNote?.trim() || "—"}`,
+    `decisionStatus разбора: ${decisionStatus}`,
     "",
     "Память кейса:",
     input.caseMemory.trim() || "—",
@@ -129,8 +140,8 @@ export async function generateLifecycleSuggestion(
       temperature: 0.2,
       response_format: { type: "json_object" },
       messages: [
-        { role: "system", content: buildSystemPrompt() },
-        { role: "user", content: buildUserPrompt(input) },
+        { role: "system", content: buildLifecycleSuggestionSystemPrompt() },
+        { role: "user", content: buildLifecycleSuggestionUserPrompt(input) },
       ],
     });
 

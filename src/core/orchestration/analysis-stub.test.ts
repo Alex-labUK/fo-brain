@@ -75,5 +75,6 @@ assert(leakAnalysis.priority?.urgency === "soon", "Fallback priority urgency");
 assert(leakAnalysis.priority?.stake === "moderate", "Fallback priority stake");
 assert(Boolean(leakAnalysis.priority?.note), "Fallback priority note");
 assert(Boolean(leakAnalysis.reply), "Fallback reply");
+assert(leakAnalysis.decisionStatus === "unresolved", "Fallback analysis stays unresolved");
 
 console.log("Analysis stub test passed.");

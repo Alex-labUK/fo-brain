@@ -10,6 +10,7 @@ import { AnalysisSections } from "@/components/AnalysisSections";
 import {
   ANALYSIS_INPUT_STORAGE_KEY,
   ANALYSIS_RESULT_STORAGE_KEY,
+  decisionStatusLabel,
   type AnalysisInput,
   type AnalysisRunResult,
 } from "@/core/orchestration/analysis-stub";
@@ -208,6 +209,7 @@ export function AnalysisResult({ subsystems }: AnalysisResultProps) {
         </section>
       )}
 
+      <p className="text-xs text-zinc-400">{decisionStatusLabel(analysis.decisionStatus)}</p>
       <AnalysisSections sections={analysis.sections} />
 
       {!isFallback && (

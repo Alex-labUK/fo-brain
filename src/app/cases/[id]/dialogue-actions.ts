@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
 import type { ConversationTurn } from "@/core/orchestration/analysis-core";
-import { SECTION_TITLES } from "@/core/orchestration/analysis-core";
+import { parseDecisionStatus, SECTION_TITLES } from "@/core/orchestration/analysis-core";
 import { continueAnalysis } from "@/core/orchestration/analysis-generate";
 import { generateLifecycleSuggestion } from "@/core/orchestration/lifecycle-suggestion";
 import { toStoredLifecycleSuggestion } from "@/lib/case-lifecycle";
@@ -51,6 +51,7 @@ export async function postCaseMessage(caseId: string, text: string): Promise<voi
     : [];
   const currentFork = currentSections.find((section) => section.title === SECTION_TITLES[1])?.content;
   const currentDeterminingFact = currentSections.find((section) => section.title === SECTION_TITLES[2])?.content;
+  const currentDecisionStatus = parseDecisionStatus(caseItem.analysisResult);
 
   await prisma.caseMessage.create({
     data: {
@@ -79,6 +80,7 @@ export async function postCaseMessage(caseId: string, text: string): Promise<voi
     caseMemory: caseItem.caseMemory,
     currentFork,
     currentDeterminingFact,
+    currentDecisionStatus,
   });
 
   if (run.source === "ai") {

@@ -14,6 +14,25 @@ enum CaseStatus {
   cancelled
 }
 
+enum CaseLifecycleState {
+  new
+  under_analysis
+  waiting_for_fact
+  waiting_for_third_party
+  waiting_for_principal
+  executing
+  monitoring
+  closed
+}
+
+enum CaseBlockerType {
+  none
+  fact
+  third_party
+  principal
+  execution
+}
+
 enum PrincipleStatus {
   candidate
   pattern
@@ -110,6 +129,10 @@ model Case {
   priorityStake   String?
   priorityNote    String?
   caseMemory      String     @default("")
+  lifecycleState     CaseLifecycleState @default(under_analysis)
+  blockerType        CaseBlockerType    @default(none)
+  blockerNote        String?
+  lifecycleUpdatedAt DateTime           @default(now())
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 

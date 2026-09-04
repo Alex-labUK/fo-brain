@@ -1,7 +1,13 @@
 "use server";
 
-import type { CaseStatus } from "@prisma/client";
+import type { CaseBlockerType, CaseLifecycleState, CaseStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
+import {
+  hasLifecycleChanged,
+  isBlockerType,
+  isLifecycleState,
+  normalizeLifecycleUpdate,
+} from "@/lib/case-lifecycle";
 import { prisma } from "@/lib/prisma";
 
 function revalidateCasePaths(id: string): void {
@@ -45,6 +51,59 @@ export async function updateCaseDetails(id: string, input: UpdateCaseDetailsInpu
     data: {
       title,
       domain,
+    },
+  });
+  revalidateCasePaths(id);
+}
+
+export type UpdateCaseLifecycleInput = {
+  lifecycleState: CaseLifecycleState;
+  blockerType: CaseBlockerType;
+  blockerNote?: string | null;
+};
+
+export async function updateCaseLifecycle(
+  id: string,
+  input: UpdateCaseLifecycleInput,
+): Promise<void> {
+  if (!isLifecycleState(input.lifecycleState)) {
+    throw new Error("Некорректное состояние жизненного цикла");
+  }
+  if (!isBlockerType(input.blockerType)) {
+    throw new Error("Некорректный тип блокера");
+  }
+
+  const caseItem = await prisma.case.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      lifecycleState: true,
+      blockerType: true,
+      blockerNote: true,
+    },
+  });
+
+  if (!caseItem) {
+    throw new Error("Кейс не найден");
+  }
+
+  const next = normalizeLifecycleUpdate({
+    lifecycleState: input.lifecycleState,
+    blockerType: input.blockerType,
+    blockerNote: input.blockerNote,
+  });
+
+  if (!hasLifecycleChanged(caseItem, next)) {
+    return;
+  }
+
+  await prisma.case.update({
+    where: { id },
+    data: {
+      lifecycleState: next.lifecycleState,
+      blockerType: next.blockerType,
+      blockerNote: next.blockerNote,
+      lifecycleUpdatedAt: new Date(),
     },
   });
   revalidateCasePaths(id);

@@ -5,6 +5,7 @@ import { PriorityBadge } from "@/components/PriorityBadge";
 import { CaseStatusBadge } from "@/components/StatusBadge";
 import { CaseDetailControls } from "@/app/cases/[id]/CaseDetailControls";
 import { CaseDialogueLauncher } from "@/app/cases/[id]/CaseDialogueLauncher";
+import { CaseLifecyclePanel } from "@/app/cases/[id]/CaseLifecyclePanel";
 import { CollapsibleCaseBlock } from "@/app/cases/[id]/CollapsibleCaseBlock";
 import { normalizeAnalysisResult } from "@/core/orchestration/analysis-core";
 import { ensureSeeded } from "@/lib/ensure-seeded";
@@ -116,6 +117,15 @@ export default async function CaseDetailPage({ params }: PageProps) {
       </details>
 
       <section className="mt-6 space-y-4">
+        <CaseLifecyclePanel
+          caseId={caseItem.id}
+          lifecycleState={caseItem.lifecycleState}
+          blockerType={caseItem.blockerType}
+          blockerNote={caseItem.blockerNote}
+          lifecycleUpdatedAt={caseItem.lifecycleUpdatedAt.toISOString()}
+          renderedAt={new Date().toISOString()}
+        />
+
         {(caseItem.priorityUrgency || caseItem.priorityStake || caseItem.priorityNote) && (
           <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3 shadow-sm">
             <h2 className="text-xs font-medium uppercase tracking-wide text-zinc-500">Приоритет</h2>

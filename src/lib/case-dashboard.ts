@@ -300,7 +300,7 @@ export function deriveNowStatus(input: DashboardCaseInput): string | null {
   return null;
 }
 
-export function deriveDashboardStatus(input: DashboardCaseInput): string | null {
+function deriveOperationalStatus(input: DashboardCaseInput): string | null {
   const lifecycle = lifecycleOf(input);
   const owner = deriveWaitingOwner(input);
   const execution = storedExecution(input);
@@ -314,7 +314,39 @@ export function deriveDashboardStatus(input: DashboardCaseInput): string | null 
     return executionOwner ? `Исполняется · ${executionOwner}` : "Исполняется";
   }
   if (lifecycle === "monitoring") return "Мониторинг";
-  return deriveNowStatus(input);
+  return null;
+}
+
+export function deriveDashboardStatus(input: DashboardCaseInput): string | null {
+  return deriveOperationalStatus(input) ?? deriveNowStatus(input);
+}
+
+/** Register status: most relevant operational state. Classification is unchanged. */
+export function deriveRegisterStatus(input: DashboardCaseInput): string {
+  const lifecycle = lifecycleOf(input);
+  if (lifecycle === "closed" && visibleDashboardReopen(input) !== null) {
+    return "FO Brain рекомендует возобновить";
+  }
+  if (lifecycle !== "closed" && (hasVisibleLifecycleSuggestion(input) || hasExecutionReview(input))) {
+    return "Требует подтверждения";
+  }
+  if (lifecycle !== "closed" && storedExecution(input).executionStatus === "pending") {
+    return "Исполняется";
+  }
+  if (lifecycle === "waiting_for_principal") return "Нужна позиция Principal";
+  if (lifecycle === "waiting_for_fact") return "Ожидаем факт";
+  if (lifecycle === "waiting_for_third_party") return "Ожидаем третью сторону";
+  if (lifecycle === "executing") return "Исполняется";
+  if (lifecycle === "monitoring") return "Мониторинг";
+  if (lifecycle === "closed") return "Закрыт";
+  if (lifecycle === "new") return "Новый";
+  return "На анализе";
+}
+
+export function derivePriorityLabel(color: PriorityColor): "Срочно" | "Скоро" | null {
+  if (color === "red") return "Срочно";
+  if (color === "amber") return "Скоро";
+  return null;
 }
 
 /** Prefer Determining Fact as the question that must be answered now. */
@@ -326,17 +358,45 @@ export function deriveFocusLine(input: DashboardCaseInput): string | null {
   );
 }
 
+function outcomeOf(input: DashboardCaseInput): string | null {
+  return analysisSection(input.analysisResult, SECTION_TITLES[0]);
+}
+
+function forkOf(input: DashboardCaseInput): string | null {
+  return analysisSection(input.analysisResult, SECTION_TITLES[1]);
+}
+
 export function deriveDashboardContext(
   input: DashboardCaseInput,
   group: DashboardGroup = classifyCaseForDashboard(input),
 ): string | null {
   if (group === "executing") return compactLine(input.executionStep);
   if (group === "closed") {
-    const fork = analysisSection(input.analysisResult, SECTION_TITLES[1]);
+    const fork = forkOf(input);
     const resolution = fork?.startsWith("Решение определено:") ? fork : null;
     return compactLine(resolution || input.executionStep);
   }
   return deriveFocusLine(input);
+}
+
+/** One scan line for the Решения register. Never dumps the full analysis. */
+export function deriveRegisterContext(input: DashboardCaseInput): string | null {
+  const lifecycle = lifecycleOf(input);
+  const group = classifyCaseForDashboard(input);
+  const fact = determiningFactOf(input);
+  const blocker = input.blockerNote?.trim() || null;
+  const fork = forkOf(input);
+  const outcome = outcomeOf(input);
+
+  if (isWaitingLifecycle(lifecycle)) return compactLine(fact || blocker);
+  if (group === "executing") return compactLine(input.executionStep);
+  if (lifecycle === "waiting_for_principal") return compactLine(fact || fork);
+  if (group === "monitoring") return compactLine(fact || fork || outcome);
+  if (group === "closed") {
+    const resolution = fork?.startsWith("Решение определено:") ? fork : null;
+    return compactLine(resolution || input.executionStep);
+  }
+  return compactLine(fact || fork || outcome);
 }
 
 export function visibleDashboardReopen(
@@ -476,4 +536,98 @@ export function listDecisionsCases(
     ...portfolio.monitoring,
     ...portfolio.other,
   ];
+}
+
+export type RegisterRow = {
+  id: string;
+  title: string;
+  group: DashboardGroup;
+  statusLine: string;
+  contextLine: string | null;
+  priorityColor: PriorityColor;
+  priorityLabel: "Срочно" | "Скоро" | null;
+  reopenMarker: boolean;
+};
+
+export function toRegisterRow(input: DashboardCaseInput): RegisterRow {
+  const priorityColor = priorityColorOf(input);
+  return {
+    id: input.id,
+    title: input.title,
+    group: classifyCaseForDashboard(input),
+    statusLine: deriveRegisterStatus(input),
+    contextLine: deriveRegisterContext(input),
+    priorityColor,
+    priorityLabel: derivePriorityLabel(priorityColor),
+    reopenMarker: visibleDashboardReopen(input) !== null,
+  };
+}
+
+function allOpenBand(input: DashboardCaseInput): number {
+  const lifecycle = lifecycleOf(input);
+  if (isPrimaryAttentionCandidate(input) && lifecycle !== "waiting_for_principal") return 0;
+  if (lifecycle === "waiting_for_principal") return 1;
+  const group = classifyCaseForDashboard(input);
+  if (group === "waiting") return 2;
+  if (group === "executing") return 3;
+  if (group === "monitoring") return 4;
+  return 5;
+}
+
+/** All-open register: attention now, principal, waiting, executing, monitoring, other; then priority/recency. */
+export function sortAllOpenCases(cases: DashboardCaseInput[]): DashboardCaseInput[] {
+  return [...cases].sort((a, b) => {
+    const band = allOpenBand(a) - allOpenBand(b);
+    if (band !== 0) return band;
+    return comparePriorityThenRecency(a, b);
+  });
+}
+
+export function dashboardOpenCount(portfolio: DashboardPortfolio): number {
+  const counts = dashboardCounts(portfolio);
+  return portfolio.now.length + counts.waiting + counts.executing + counts.monitoring + counts.other;
+}
+
+export const REGISTER_FILTERS: { view?: SecondaryView; label: string }[] = [
+  { label: "Все открытые" },
+  { view: "waiting", label: "Ожидают" },
+  { view: "executing", label: "Исполняются" },
+  { view: "monitoring", label: "Мониторинг" },
+  { view: "other", label: "Другие открытые" },
+  { view: "closed", label: "Архив" },
+];
+
+export function registerSubtitle(view?: SecondaryView): string {
+  return view ? SECONDARY_VIEW_LABELS[view] : "Все открытые решения";
+}
+
+export function registerEmptyMessage(view?: SecondaryView): string {
+  if (view === "waiting") return "Нет решений в ожидании.";
+  if (view === "executing") return "Нет решений в исполнении.";
+  if (view === "monitoring") return "Нет решений на мониторинге.";
+  if (view === "closed") return "Архив пуст.";
+  if (view === "other") return "Нет других открытых решений.";
+  return "Нет открытых решений.";
+}
+
+export function matchesRegisterSearch(row: RegisterRow, query: string): boolean {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return true;
+  if (row.title.toLowerCase().includes(needle)) return true;
+  return (row.contextLine ?? "").toLowerCase().includes(needle);
+}
+
+export function listRegisterRows(
+  cases: DashboardCaseInput[],
+  view?: SecondaryView,
+  portfolio: DashboardPortfolio = buildDashboardPortfolio(cases),
+): RegisterRow[] {
+  const byId = new Map(cases.map((caseItem) => [caseItem.id, caseItem]));
+  const cards = view ? portfolio[view] : listDecisionsCases(portfolio);
+  const inputs = cards.flatMap((card) => {
+    const row = byId.get(card.id);
+    return row ? [row] : [];
+  });
+  const ordered = view ? inputs : sortAllOpenCases(inputs);
+  return ordered.map(toRegisterRow);
 }

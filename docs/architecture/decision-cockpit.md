@@ -1,7 +1,7 @@
 # Decision Cockpit
 
-Version: 1.2  
-Status: Home — Требуют решения  
+Version: 1.3  
+Status: Home cockpit + Решения register  
 Path: `docs/architecture/decision-cockpit.md`
 
 ---
@@ -43,3 +43,23 @@ Visually weaker: `Архив`.
 Operational groups unchanged: waiting / executing / monitoring / other / closed. A case in the primary list is omitted from these counts.
 
 Home summary cells navigate to the existing Решения page (`/cases?view=…`). The home URL stays `/`. Case lists never expand on the home page.
+
+---
+
+## Решения page
+
+`/cases` is the full decision register. It is not a second cockpit.
+
+**Purpose.** Scan the portfolio: which cases exist, and what state each is in.
+
+**Filters.** Compact counts, same classification as home:
+
+`Все открытые · Ожидают · Исполняются · Мониторинг · Другие открытые · Архив`
+
+Default subtitle: **Все открытые решения**. Filtered subtitles reuse the category names. Home “now” cases stay in all-open; they are omitted from secondary counts, matching the cockpit cells.
+
+**Row.** Title + one context line; status + traffic-light if meaningful. Closed + reopen shows `FO Brain рекомендует возобновить` — no Apply. Click opens `/cases/{id}`.
+
+**Sort.** All-open: attention now, principal, waiting, executing, monitoring, other, then priority/recency. Group views reuse dashboard sort (closed: most recently closed first).
+
+**Search.** `Найти решение` matches title or context line.

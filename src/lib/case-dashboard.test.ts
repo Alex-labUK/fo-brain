@@ -10,13 +10,19 @@ import {
   buildDashboardPortfolio,
   classifyCaseForDashboard,
   dashboardCounts,
+  dashboardOpenCount,
   decisionsHref,
   deriveFocusLine,
   deriveNowStatus,
   isPrimaryAttentionCandidate,
   listDecisionsCases,
+  listRegisterRows,
+  matchesRegisterSearch,
+  registerEmptyMessage,
+  registerSubtitle,
   selectNowCases,
   toDashboardCard,
+  toRegisterRow,
   visibleDashboardReopen,
   type DashboardCaseInput,
 } from "@/lib/case-dashboard";
@@ -251,14 +257,15 @@ assert(
   "K: generic attention copy is not used",
 );
 
-const mixed = buildDashboardPortfolio([
+const mixedInputs: DashboardCaseInput[] = [
   baseCase({ id: "a", lifecycleState: "closed" }),
   baseCase({ id: "b", lifecycleState: "waiting_for_fact" }),
   baseCase({ id: "c", lifecycleState: "executing" }),
   baseCase({ id: "d", lifecycleState: "monitoring" }),
   baseCase({ id: "e", lifecycleState: "waiting_for_principal" }),
   baseCase({ id: "f", lifecycleState: "under_analysis" }),
-]);
+];
+const mixed = buildDashboardPortfolio(mixedInputs);
 const groupedIds = [
   ...mixed.now,
   ...mixed.waiting,
@@ -353,8 +360,277 @@ assert(
   "default Decisions list is all-open and excludes archive",
 );
 
+const openRegister = listRegisterRows(mixedInputs);
+assert(
+  openRegister.every((row) => row.id !== "a") && openRegister.length === 5,
+  "A: /cases default shows all open cases, not closed",
+);
+assert(
+  listRegisterRows(mixedInputs, "waiting").every((row) => row.group === "waiting") &&
+    listRegisterRows(mixedInputs, "waiting").map((row) => row.id).join(",") === "b",
+  "B: waiting filter returns only waiting",
+);
+assert(
+  listRegisterRows(mixedInputs, "executing").every((row) => row.group === "executing") &&
+    listRegisterRows(mixedInputs, "executing").map((row) => row.id).join(",") === "c",
+  "C: executing filter returns only executing",
+);
+assert(
+  listRegisterRows(mixedInputs, "monitoring").every((row) => row.group === "monitoring") &&
+    listRegisterRows(mixedInputs, "monitoring").map((row) => row.id).join(",") === "d",
+  "D: monitoring filter returns only monitoring",
+);
+assert(
+  listRegisterRows(mixedInputs, "other").every((row) => row.group === "other") &&
+    listRegisterRows(mixedInputs, "other").map((row) => row.id).join(",") === "f",
+  "E: other filter returns only other/open",
+);
+assert(
+  listRegisterRows(mixedInputs, "closed").every((row) => row.group === "closed") &&
+    listRegisterRows(mixedInputs, "closed").map((row) => row.id).join(",") === "a",
+  "F: closed filter returns only archive cases",
+);
+
+const closedReopenRow = toRegisterRow(closedReopen);
+assert(closedReopenRow.group === "closed", "G: closed + reopen remains closed");
+assert(
+  closedReopenRow.statusLine === "FO Brain рекомендует возобновить",
+  "G: closed + reopen uses the reopen status",
+);
+assert(
+  !listRegisterRows([closedReopen]).some((row) => row.id === "closed-reopen"),
+  "G: closed + reopen is not in all-open",
+);
+
+const principalRow = openRegister.find((row) => row.id === "e");
+assert(principalRow !== undefined, "H: waiting_for_principal appears in all-open");
+assert(principalRow?.statusLine === "Нужна позиция Principal", "H: waiting_for_principal has correct label");
+
+assert(toRegisterRow(baseCase({ id: "st-new", lifecycleState: "new" })).statusLine === "Новый", "register maps new");
+assert(
+  toRegisterRow(baseCase({ id: "st-analysis", lifecycleState: "under_analysis" })).statusLine === "На анализе",
+  "register maps under_analysis",
+);
+assert(
+  toRegisterRow(baseCase({ id: "st-third", lifecycleState: "waiting_for_third_party" })).statusLine ===
+    "Ожидаем третью сторону",
+  "register maps waiting_for_third_party",
+);
+assert(
+  toRegisterRow(baseCase({ id: "st-monitor", lifecycleState: "monitoring" })).statusLine === "Мониторинг",
+  "register maps monitoring",
+);
+assert(
+  toRegisterRow(baseCase({ id: "st-closed", lifecycleState: "closed" })).statusLine === "Закрыт",
+  "register maps closed",
+);
+
+assert(
+  toRegisterRow(
+    baseCase({
+      id: "exec-owner",
+      lifecycleState: "executing",
+      executionOwner: "Юрист / transaction team",
+    }),
+  ).statusLine === "Исполняется",
+  "I: executing status is lifecycle mapping, not owner text",
+);
+assert(
+  toRegisterRow(
+    baseCase({
+      id: "wait-owner",
+      lifecycleState: "waiting_for_fact",
+      analysisResult: unresolvedMunicipal,
+    }),
+  ).statusLine === "Ожидаем факт",
+  "J: waiting status is not invented from analysis roles",
+);
+assert(
+  toRegisterRow(
+    baseCase({
+      id: "wait-prose",
+      lifecycleState: "waiting_for_fact",
+      blockerNote: "Муниципалитет должен ответить письменно.",
+    }),
+  ).statusLine === "Ожидаем факт",
+  "J: waiting status is not invented from blockerNote",
+);
+
+assert(
+  toRegisterRow(
+    baseCase({
+      id: "suggest-status",
+      lifecycleState: "under_analysis",
+      lifecycleSuggestion: {
+        state: "waiting_for_fact",
+        reason: "Нужно запросить разъяснение.",
+        dismissed: false,
+      },
+    }),
+  ).statusLine === "Требует подтверждения",
+  "visible lifecycle suggestion is Требует подтверждения",
+);
+assert(
+  toRegisterRow(
+    baseCase({
+      id: "exec-review-status",
+      lifecycleState: "executing",
+      executionStatus: "pending",
+      executionStep: "Завершить регистрацию",
+      analysisResult: unresolvedMunicipal,
+    }),
+  ).statusLine === "Требует подтверждения",
+  "execution review is Требует подтверждения",
+);
+assert(
+  toRegisterRow(
+    baseCase({
+      id: "monitor-pending",
+      lifecycleState: "monitoring",
+      executionStatus: "pending",
+      executionStep: "Проверить статус регистрации",
+    }),
+  ).statusLine === "Исполняется",
+  "monitoring + pending execution displays Исполняется",
+);
+assert(
+  toRegisterRow(
+    baseCase({
+      id: "wait-pending",
+      lifecycleState: "waiting_for_fact",
+      executionStatus: "pending",
+      executionStep: "Дождаться ответа и закрыть шаг",
+    }),
+  ).statusLine === "Исполняется",
+  "waiting_for_fact + pending execution displays Исполняется",
+);
+assert(
+  toRegisterRow(
+    baseCase({
+      id: "closed-pending",
+      lifecycleState: "closed",
+      executionStatus: "pending",
+      executionStep: "Завершить регистрацию",
+    }),
+  ).statusLine === "Закрыт",
+  "closed remains Закрыт unless reopen suggestion exists",
+);
+assert(
+  toRegisterRow(
+    baseCase({
+      id: "monitor-pending-review",
+      lifecycleState: "monitoring",
+      executionStatus: "pending",
+      executionStep: "Проверить статус регистрации",
+      analysisResult: unresolvedMunicipal,
+    }),
+  ).statusLine === "Требует подтверждения",
+  "approval state still overrides pending execution",
+);
+
+const urgentRegister = toRegisterRow(
+  baseCase({
+    id: "urgent-status",
+    lifecycleState: "under_analysis",
+    priorityUrgency: "urgent",
+    priorityStake: "moderate",
+    analysisResult: unresolvedMunicipal,
+  }),
+);
+assert(urgentRegister.statusLine === "На анализе", "priority is not used as status");
+assert(urgentRegister.priorityLabel === "Срочно", "urgent still has a separate Срочно badge");
+assert(!openRegister.some((row) => row.statusLine === "Открыт"), "no row uses the generic Открыт status");
+
+assert(
+  listRegisterRows([
+    baseCase({
+      id: "soon-open",
+      lifecycleState: "under_analysis",
+      priorityUrgency: "soon",
+      priorityStake: "moderate",
+      analysisResult: unresolvedMunicipal,
+      updatedAt: "2026-09-04T12:00:00.000Z",
+    }),
+    baseCase({
+      id: "urgent-open",
+      lifecycleState: "under_analysis",
+      priorityUrgency: "urgent",
+      priorityStake: "moderate",
+      analysisResult: unresolvedMunicipal,
+      updatedAt: "2026-09-01T12:00:00.000Z",
+    }),
+  ])[0]?.id === "urgent-open",
+  "K: urgent sorts before soon/normal",
+);
+assert(
+  listRegisterRows(
+    [
+      baseCase({
+        id: "closed-old",
+        lifecycleState: "closed",
+        lifecycleUpdatedAt: "2026-01-01T00:00:00.000Z",
+      }),
+      baseCase({
+        id: "closed-new",
+        lifecycleState: "closed",
+        lifecycleUpdatedAt: "2026-09-01T00:00:00.000Z",
+      }),
+    ],
+    "closed",
+  )[0]?.id === "closed-new",
+  "L: closed sorted most recently closed first",
+);
+
+const searchRow = toRegisterRow(
+  baseCase({
+    id: "search-row",
+    title: "Продажа квартиры в Вене",
+    analysisResult: unresolvedMunicipal,
+  }),
+);
+assert(matchesRegisterSearch(searchRow, "вене"), "M: search matches title");
+assert(matchesRegisterSearch(searchRow, "обязательные действия"), "N: search matches context line");
+
+const filteredCategoryIds = [
+  ...listRegisterRows(mixedInputs, "waiting"),
+  ...listRegisterRows(mixedInputs, "executing"),
+  ...listRegisterRows(mixedInputs, "monitoring"),
+  ...listRegisterRows(mixedInputs, "other"),
+  ...listRegisterRows(mixedInputs, "closed"),
+].map((row) => row.id);
+assert(
+  filteredCategoryIds.length === new Set(filteredCategoryIds).size,
+  "O: no duplicate case across filtered categories",
+);
+
+const sparseRegister = toRegisterRow({
+  id: "sparse-reg",
+  title: "Старый кейс",
+  lifecycleState: "under_analysis",
+});
+assert(sparseRegister.statusLine === "На анализе" && sparseRegister.contextLine === null, "P: sparse legacy case renders safely");
+assert(dashboardOpenCount(mixed) === 5, "open count is now + secondary open groups");
+assert(registerSubtitle() === "Все открытые решения", "default subtitle is Все открытые решения");
+assert(registerEmptyMessage("waiting") === "Нет решений в ожидании.", "waiting empty copy");
+assert(registerEmptyMessage("closed") === "Архив пуст.", "archive empty copy");
+
 const decisionsPage = readFileSync(path.join(root, "src/app/cases/page.tsx"), "utf8");
 assert(decisionsPage.includes("Решения"), "Decisions page heading is Решения");
-assert(decisionsPage.includes("SECONDARY_VIEW_LABELS"), "Decisions page shows the selected category");
+assert(decisionsPage.includes("registerSubtitle"), "Decisions page shows the selected category");
+assert(decisionsPage.includes("DecisionsRegister"), "Decisions page uses the register");
+assert(!decisionsPage.includes("CaseFilters"), "Decisions page has no domain/status CRM filters");
+assert(!decisionsPage.includes("CaseList"), "Decisions page does not use the old case list");
+
+const registerUi = readFileSync(path.join(root, "src/components/DecisionsRegister.tsx"), "utf8");
+assert(registerUi.includes("Найти решение"), "register has search placeholder");
+assert(registerUi.includes("{row.statusLine}"), "every row shows the mapped status");
+assert(!registerUi.includes("Применить"), "register has no Apply control");
+assert(!registerUi.includes("border-l-"), "register rows have no left accent line");
+assert(registerUi.includes("border-b border-black"), "active filter has a thin black underline");
+assert(registerUi.includes("decisionsHref(item.view)"), "filters keep existing view URLs");
+assert(registerUi.includes('href={`/cases/${row.id}`}'), "whole row opens the case page");
+assert(registerUi.includes("REGISTER_FILTERS"), "register uses compact category filters");
+assert(registerUi.includes("bg-zinc-300"), "missing priority uses a neutral grey dot");
+assert(cockpit.includes("border-l-red-500"), "home cockpit left accent is unchanged");
 
 console.log("Case dashboard classification test passed.");

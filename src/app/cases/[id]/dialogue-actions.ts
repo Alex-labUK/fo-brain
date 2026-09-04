@@ -2,9 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "crypto";
+import { Prisma } from "@prisma/client";
 import type { ConversationTurn } from "@/core/orchestration/analysis-core";
 import { SECTION_TITLES } from "@/core/orchestration/analysis-core";
 import { continueAnalysis } from "@/core/orchestration/analysis-generate";
+import { generateLifecycleSuggestion } from "@/core/orchestration/lifecycle-suggestion";
+import { toStoredLifecycleSuggestion } from "@/lib/case-lifecycle";
 import { prisma } from "@/lib/prisma";
 
 const AI_UNAVAILABLE_REPLY =
@@ -28,7 +31,15 @@ export async function postCaseMessage(caseId: string, text: string): Promise<voi
 
   const caseItem = await prisma.case.findUnique({
     where: { id: caseId },
-    select: { id: true, facts: true, caseMemory: true, analysisResult: true },
+    select: {
+      id: true,
+      facts: true,
+      caseMemory: true,
+      analysisResult: true,
+      lifecycleState: true,
+      blockerType: true,
+      blockerNote: true,
+    },
   });
 
   if (!caseItem) {
@@ -77,11 +88,25 @@ export async function postCaseMessage(caseId: string, text: string): Promise<voi
       "Разбор обновлён.";
 
     const persistedCaseMemory = run.updatedCaseMemory?.trim() || caseItem.caseMemory;
+    const dialogue: ConversationTurn[] = priorMessages.map((message) => ({
+      role: message.role as ConversationTurn["role"],
+      content: message.content,
+    }));
+    const lifecycleSuggestion = await generateLifecycleSuggestion({
+      lifecycleState: caseItem.lifecycleState,
+      blockerType: caseItem.blockerType,
+      blockerNote: caseItem.blockerNote,
+      caseMemory: persistedCaseMemory,
+      facts: caseItem.facts,
+      analysis: run.result,
+      dialogue,
+    });
 
     const caseUpdate: {
       analysisResult: typeof run.result;
       recordedResult: string;
       caseMemory: string;
+      lifecycleSuggestion: Prisma.InputJsonValue | typeof Prisma.DbNull;
       priorityUrgency?: string | null;
       priorityStake?: string | null;
       priorityNote?: string | null;
@@ -89,6 +114,9 @@ export async function postCaseMessage(caseId: string, text: string): Promise<voi
       analysisResult: run.result,
       recordedResult: buildRecordedResultFromAnalysis(run.result.sections),
       caseMemory: persistedCaseMemory,
+      lifecycleSuggestion: lifecycleSuggestion
+        ? toStoredLifecycleSuggestion(lifecycleSuggestion)
+        : Prisma.DbNull,
     };
 
     if (run.result.priority) {

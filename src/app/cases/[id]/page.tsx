@@ -6,8 +6,10 @@ import { CaseStatusBadge } from "@/components/StatusBadge";
 import { CaseDetailControls } from "@/app/cases/[id]/CaseDetailControls";
 import { CaseDialogueLauncher } from "@/app/cases/[id]/CaseDialogueLauncher";
 import { CaseLifecyclePanel } from "@/app/cases/[id]/CaseLifecyclePanel";
+import { CaseLifecycleSuggestionCard } from "@/app/cases/[id]/CaseLifecycleSuggestionCard";
 import { CollapsibleCaseBlock } from "@/app/cases/[id]/CollapsibleCaseBlock";
 import { normalizeAnalysisResult } from "@/core/orchestration/analysis-core";
+import { visibleLifecycleSuggestion } from "@/lib/case-lifecycle";
 import { ensureSeeded } from "@/lib/ensure-seeded";
 import { formatDomain } from "@/lib/labels";
 import {
@@ -62,6 +64,10 @@ export default async function CaseDetailPage({ params }: PageProps) {
     parseUrgency(caseItem.priorityUrgency),
     parseStake(caseItem.priorityStake),
   );
+  const lifecycleSuggestion = visibleLifecycleSuggestion(caseItem.lifecycleSuggestion, {
+    lifecycleState: caseItem.lifecycleState,
+    blockerNote: caseItem.blockerNote,
+  });
 
   return (
     <main className="mx-auto w-full max-w-3xl px-6 py-6">
@@ -125,6 +131,9 @@ export default async function CaseDetailPage({ params }: PageProps) {
           lifecycleUpdatedAt={caseItem.lifecycleUpdatedAt.toISOString()}
           renderedAt={new Date().toISOString()}
         />
+        {lifecycleSuggestion && (
+          <CaseLifecycleSuggestionCard caseId={caseItem.id} suggestion={lifecycleSuggestion} />
+        )}
 
         {(caseItem.priorityUrgency || caseItem.priorityStake || caseItem.priorityNote) && (
           <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3 shadow-sm">

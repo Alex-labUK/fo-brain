@@ -7,6 +7,7 @@ import {
   isBlockerType,
   isLifecycleState,
   normalizeLifecycleUpdate,
+  parseStoredLifecycleSuggestion,
 } from "@/lib/case-lifecycle";
 import { prisma } from "@/lib/prisma";
 
@@ -104,6 +105,60 @@ export async function updateCaseLifecycle(
       blockerType: next.blockerType,
       blockerNote: next.blockerNote,
       lifecycleUpdatedAt: new Date(),
+    },
+  });
+  revalidateCasePaths(id);
+}
+
+export async function applyLifecycleSuggestion(id: string): Promise<void> {
+  const caseItem = await prisma.case.findUnique({
+    where: { id },
+    select: { lifecycleSuggestion: true },
+  });
+
+  if (!caseItem) {
+    throw new Error("Кейс не найден");
+  }
+
+  const stored = parseStoredLifecycleSuggestion(caseItem.lifecycleSuggestion);
+  if (!stored || stored.dismissed) {
+    return;
+  }
+
+  await updateCaseLifecycle(id, {
+    lifecycleState: stored.state,
+    blockerType: stored.state === "executing" && stored.blockerNote ? "execution" : "none",
+    blockerNote: stored.blockerNote ?? null,
+  });
+
+  await prisma.case.update({
+    where: { id },
+    data: {
+      lifecycleSuggestion: { ...stored, dismissed: true },
+    },
+  });
+  revalidateCasePaths(id);
+}
+
+export async function dismissLifecycleSuggestion(id: string): Promise<void> {
+  const caseItem = await prisma.case.findUnique({
+    where: { id },
+    select: { lifecycleSuggestion: true },
+  });
+
+  if (!caseItem) {
+    throw new Error("Кейс не найден");
+  }
+
+  const stored = parseStoredLifecycleSuggestion(caseItem.lifecycleSuggestion);
+  if (!stored || stored.dismissed) {
+    return;
+  }
+
+  await prisma.case.update({
+    where: { id },
+    data: {
+      lifecycleSuggestion: { ...stored, dismissed: true },
     },
   });
   revalidateCasePaths(id);

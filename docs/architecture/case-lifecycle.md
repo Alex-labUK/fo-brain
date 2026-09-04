@@ -1,7 +1,7 @@
 # Case Status and Case Lifecycle
 
-Version: 1.0  
-Status: Stage 2 implementation note  
+Version: 1.1  
+Status: Stage 3 implementation note  
 Path: `docs/architecture/case-lifecycle.md`
 
 ---
@@ -78,6 +78,27 @@ This Stage 2 overlay lives on the existing `Case` record. It does not introduce 
 
 ---
 
+## AI lifecycle suggestion (Stage 3)
+
+After each AI analysis cycle, FO Brain may **suggest** a lifecycle state and blocker note.
+
+Rules:
+
+- AI may suggest lifecycle.
+- AI may not apply lifecycle.
+- Human approval is required for every lifecycle write.
+- The suggestion is **advisory**. It is not a second source of truth.
+
+`Case.lifecycleSuggestion` stores the latest advisory payload (`state`, optional `blockerNote`, `reason`, `dismissed`). It is overwritten on every successful new analysis so a newer cycle cannot leave a stale recommendation on screen.
+
+The public Decision Engine `AnalysisResult` contract is unchanged. The suggestion is generated in a separate call and transported/stored outside `AnalysisResult`.
+
+`Применить` goes through the existing human-controlled `updateCaseLifecycle` path (normalization + explicit `lifecycleUpdatedAt`). `Оставить как есть` only dismisses the visible suggestion.
+
+AI analysis and dialogue updates must still never persist `lifecycleState`, `blockerType`, `blockerNote`, or `lifecycleUpdatedAt`.
+
+---
+
 ## Invariants for this stage
 
 1. Do not merge `CaseStatus` and `CaseLifecycleState`.
@@ -85,3 +106,4 @@ This Stage 2 overlay lives on the existing `Case` record. It does not introduce 
 3. Do not auto-transition lifecycle from analysis or from `CaseStatus`.
 4. Persist blocker type from lifecycle state where the mapping is deterministic.
 5. Treat `CaseLifecycleState` as the source of truth for the new case-management flow.
+6. An AI lifecycle suggestion is advisory until a human applies it through `updateCaseLifecycle`.

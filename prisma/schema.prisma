@@ -133,6 +133,7 @@ model Case {
   blockerType        CaseBlockerType    @default(none)
   blockerNote        String?
   lifecycleUpdatedAt DateTime           @default(now())
+  lifecycleSuggestion Json?
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 

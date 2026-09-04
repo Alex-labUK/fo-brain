@@ -68,6 +68,16 @@ export type NormalizedLifecycleUpdate = {
   blockerNote: string | null;
 };
 
+export type LifecycleSuggestion = {
+  state: CaseLifecycleState;
+  blockerNote?: string;
+  reason: string;
+};
+
+export type StoredLifecycleSuggestion = LifecycleSuggestion & {
+  dismissed: boolean;
+};
+
 type LifecycleSnapshot = {
   lifecycleState: CaseLifecycleState;
   blockerType: CaseBlockerType;
@@ -154,6 +164,79 @@ export function hasLifecycleChanged(
     current.blockerType !== next.blockerType ||
     (current.blockerNote ?? null) !== next.blockerNote
   );
+}
+
+function notesEqual(left?: string | null, right?: string | null): boolean {
+  return (left?.trim() || null) === (right?.trim() || null);
+}
+
+export function suggestionDiffersFromCurrent(
+  suggestion: LifecycleSuggestion,
+  current: Pick<LifecycleSnapshot, "lifecycleState" | "blockerNote">,
+): boolean {
+  return suggestion.state !== current.lifecycleState || !notesEqual(suggestion.blockerNote, current.blockerNote);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function parseLifecycleSuggestion(raw: unknown): LifecycleSuggestion | null {
+  if (!isRecord(raw) || !isLifecycleState(raw.state)) {
+    return null;
+  }
+
+  const reason = typeof raw.reason === "string" ? raw.reason.trim() : "";
+  if (!reason) {
+    return null;
+  }
+
+  const note = typeof raw.blockerNote === "string" ? raw.blockerNote.trim() : "";
+  const suggestion: LifecycleSuggestion = {
+    state: raw.state,
+    reason,
+  };
+
+  if (allowsBlockerNote(raw.state) && note) {
+    suggestion.blockerNote = note;
+  }
+
+  return suggestion;
+}
+
+export function parseStoredLifecycleSuggestion(raw: unknown): StoredLifecycleSuggestion | null {
+  const suggestion = parseLifecycleSuggestion(raw);
+  if (!suggestion || !isRecord(raw)) {
+    return null;
+  }
+
+  return {
+    ...suggestion,
+    dismissed: raw.dismissed === true,
+  };
+}
+
+export function toStoredLifecycleSuggestion(suggestion: LifecycleSuggestion): StoredLifecycleSuggestion {
+  return {
+    ...suggestion,
+    dismissed: false,
+  };
+}
+
+export function visibleLifecycleSuggestion(
+  raw: unknown,
+  current: Pick<LifecycleSnapshot, "lifecycleState" | "blockerNote">,
+): LifecycleSuggestion | null {
+  const stored = parseStoredLifecycleSuggestion(raw);
+  if (!stored || stored.dismissed || !suggestionDiffersFromCurrent(stored, current)) {
+    return null;
+  }
+
+  return {
+    state: stored.state,
+    blockerNote: stored.blockerNote,
+    reason: stored.reason,
+  };
 }
 
 const MONTHS_RU_SHORT = [

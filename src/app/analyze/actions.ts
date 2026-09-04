@@ -6,7 +6,9 @@ import { randomUUID } from "crypto";
 import type { AnalysisInput, AnalysisResult, AnalysisRunResult } from "@/core/orchestration/analysis-core";
 import { SECTION_TITLES } from "@/core/orchestration/analysis-core";
 import { generateAnalysis } from "@/core/orchestration/analysis-generate";
+import { generateLifecycleSuggestion } from "@/core/orchestration/lifecycle-suggestion";
 import { generateCaseId } from "@/lib/case-id";
+import { toStoredLifecycleSuggestion } from "@/lib/case-lifecycle";
 import { prisma } from "@/lib/prisma";
 
 export async function runCaseAnalysis(input: AnalysisInput): Promise<AnalysisRunResult> {
@@ -59,6 +61,18 @@ export async function saveAnalysisAsCase(input: SaveAnalysisAsCaseInput): Promis
   const id = await generateCaseId();
   const userMessage = input.input.whatHappened.trim();
   const assistantMessage = buildInitialAssistantMessage(input.analysisResult);
+  const lifecycleSuggestion = await generateLifecycleSuggestion({
+    lifecycleState: "under_analysis",
+    blockerType: "none",
+    blockerNote: null,
+    caseMemory: "",
+    facts: buildFactsFromInput(input.input),
+    analysis: input.analysisResult,
+    dialogue: [
+      { role: "user", content: userMessage },
+      { role: "assistant", content: assistantMessage },
+    ],
+  });
 
   await prisma.case.create({
     data: {
@@ -72,6 +86,9 @@ export async function saveAnalysisAsCase(input: SaveAnalysisAsCaseInput): Promis
       priorityUrgency: input.analysisResult.priority?.urgency ?? null,
       priorityStake: input.analysisResult.priority?.stake ?? null,
       priorityNote: input.analysisResult.priority?.note ?? null,
+      ...(lifecycleSuggestion
+        ? { lifecycleSuggestion: toStoredLifecycleSuggestion(lifecycleSuggestion) }
+        : {}),
       branchId: null,
       outcomeId: null,
       questionsAsked: [],

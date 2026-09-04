@@ -96,6 +96,7 @@ export async function postCaseMessage(caseId: string, text: string): Promise<voi
     currentFork,
     currentDeterminingFact,
     currentDecisionStatus,
+    decisionCycleHistory: caseItem.decisionCycleHistory,
   });
 
   if (run.source === "ai") {

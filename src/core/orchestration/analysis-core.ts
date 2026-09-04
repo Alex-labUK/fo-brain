@@ -5,6 +5,8 @@ import type { AnalysisPriority } from "@/lib/priority";
 export type AnalysisInput = {
   whatHappened: string;
   desiredOutcome?: string;
+  /** Optional archived cycles; only the most recent completed cycle is sent to the model. */
+  decisionCycleHistory?: unknown;
 };
 
 export type RoleAssignment = {
@@ -61,6 +63,8 @@ export type ContinueAnalysisInput = {
   currentFork?: string;
   currentDeterminingFact?: string;
   currentDecisionStatus?: DecisionStatus;
+  /** Optional archived cycles; only the most recent completed cycle is sent to the model. */
+  decisionCycleHistory?: unknown;
 };
 
 export const MAX_CASE_MEMORY_BULLETS = 15;
@@ -94,6 +98,218 @@ export const FORBIDDEN_PHRASES = [
   "необходимо учитывать",
   "family office должен",
 ];
+
+/**
+ * Internal prompt contract: Fork = decision routes, Fact = route selector, Actions = how to learn the fact.
+ * Unresolved only. Not a hard production rejection rule.
+ */
+export const FORK_FACT_ACTIONS_RULES = `
+Fork–Fact–Actions (только для unresolved; внутренний тест, не в JSON и не в reply):
+- Main Decision Fork — выбор между двумя существенно разными маршрутами решения, последствиями или исходами. Не методы, не расследования, не «кого спросить / что запросить / ждать или уточнить».
+- Проверка развилки: если определяющий факт = X, какой маршрут уместен? если факт не X — какой другой маршрут уместен?
+- Determining Fact — один факт, который выбирает между этими двумя маршрутами. Если факт подтверждён, хотя бы один маршрут становится неуместным/невозможным; если опровергнут — уместен другой маршрут. Иначе перепиши пару Fork/Fact.
+- Actions — только как получить или подтвердить Determining Fact (запросить документ, связаться с органом, экспертиза, юр. оценка). Не поднимай их в Main Decision Fork, если это не подлинные стратегические маршруты.
+- Перед JSON: A) обе стороны Fork — маршруты/исходы? B) один фактический ответ выбирает маршрут? C) actions только добывают этот факт? D) не просочилось ли действие в Fork? Если D = да — перепиши Fork.
+Невалидные развилки (это Actions, не Fork): «Провести экспертизу или ждать ответа»; «Запросить документы или обратиться к юристу»; «Проверить факт или действовать на текущей информации»; «Получить оценку или продолжить переговоры».
+Валидный образец: Fork — «повторное рассмотрение создаёт существенные обязательства / риск либо дополнительных действий не требуется»; Fact — какой обязательный шаг (экспертиза, работы, иное) требуется от стороны; Actions — письменное разъяснение, юр. оценка, перечень требований.
+`.trim();
+
+/**
+ * Internal prompt contract: confirmed completed events cannot reappear as live fork routes.
+ * Unresolved only. Advisory in code; not a hard production rejection rule.
+ */
+export const PAST_FACT_ROUTE_RULES = `
+Past-Fact / Route Consistency (только для unresolved; внутренний тест, не в JSON и не в reply):
+- Подтверждённые факты из caseMemory и текущих фактов кейса ограничивают пространство маршрутов. Не предлагай маршрут, который противоречит подтверждённому факту, пока текущее сообщение пользователя явно не исправляет или не заменяет этот факт.
+- Перед Main Decision Fork: оба предлагаемых маршрута ещё возможны? Маршрут невалиден, если он откладывает уже случившееся, решает «делать ли» уже сделанное, предотвращает уже подтверждённое необратимое событие, считает завершённое событие ещё ожидающим или заново открывает старое решение лишь потому, что появилась новая downstream-неопределённость.
+- Завершённое решение + новая проблема ниже по цепочке = новый цикл решения по новой неопределённости. Не реконструируй уже завершённое решение.
+- Перед JSON, по каждой стороне Fork: 1) маршрут ещё физически/юридически/операционно доступен? 2) не противоречит ли подтверждённому факту? 3) не считает ли уже свершившееся событие ещё pending? 4) не является ли это старым решением вместо текущей новой неопределённости? Если да — перепиши Fork.
+Невалидно: факт «сделка завершена» → Fork «завершить сделку или отложить завершение». Валидно: «повторное рассмотрение создаёт обязательства / риск для собственника либо дополнительных действий не требуется».
+Невалидно: «оплата произведена» → «оплатить сейчас или ждать». Валидно: «оплата полностью закрыла обязательство либо остаточный риск сохраняется».
+Невалидно: «договор подписан» → «подписать или передоговориться до подписания». Валидно: «подписанный договор оставляет сторону открытой к новому вопросу либо достаточно защищает».
+Не применяй этот тест, если decisionStatus = resolved. Если текущее сообщение явно отменяет подтверждённый факт — этот факт больше не ограничивает маршруты.
+`.trim();
+
+const ACTION_METHOD_PREFIX =
+  /^(?:провести(?:\s+\S+){0,3}\s+(?:проверк|экспертиз)[а-яё]*|запросить|получить|связаться|обратиться|дождаться|уточнить|проверить|ожидать|ждать|принять|собрать|направить|заказать|request|obtain|contact|inspect|investigate|wait(?:\s+for)?|ask|review|conduct|take)(?=$|[\s.,;:!?«»"'()—–-])/iu;
+
+function splitForkSides(fork: string): string[] {
+  return fork
+    .split(/\s+(?:или|либо|vs\.?|or)\s+|\/(?=\s*\S)/i)
+    .map((side) => side.replace(/^["«)\s]+|["»(\s]+$/g, "").trim())
+    .filter(Boolean);
+}
+
+/** Advisory: both sides of an unresolved fork look like fact-finding methods, not decision routes. */
+export function forkLooksLikeActionMethods(fork: string): boolean {
+  const sides = splitForkSides(fork);
+  if (sides.length < 2) return false;
+  return sides.filter((side) => ACTION_METHOD_PREFIX.test(side)).length >= 2;
+}
+
+export function unresolvedForkLooksLikeActionMethods(
+  result: Pick<AnalysisResult, "decisionStatus" | "sections">,
+): boolean {
+  if (result.decisionStatus === "resolved") return false;
+  const fork =
+    result.sections.find((section) => section.title === SECTION_TITLES[1])?.content?.trim() || "";
+  return forkLooksLikeActionMethods(fork);
+}
+
+/** One extra model call at most when an unresolved fork is action-shaped. Never loop. */
+export const MAX_FORK_REPAIR_CALLS = 1;
+
+export function shouldRepairActionShapedFork(
+  result: Pick<AnalysisResult, "decisionStatus" | "sections">,
+): boolean {
+  return unresolvedForkLooksLikeActionMethods(result);
+}
+
+export type ForkRepairFactContext = {
+  confirmedFacts?: string;
+  caseMemory?: string;
+  currentMessage?: string;
+};
+
+export type ForkRepairChoice = {
+  result: AnalysisResult;
+  usedRepair: boolean;
+  reason:
+    | "original_resolved"
+    | "original_not_action_shaped"
+    | "missing_or_unusable_repair"
+    | "repaired_resolved"
+    | "repaired_action_shaped"
+    | "repaired_past_fact"
+    | "accepted";
+};
+
+function confirmedTextForRepair(context?: ForkRepairFactContext): string {
+  return [context?.confirmedFacts, context?.caseMemory].filter(Boolean).join("\n");
+}
+
+/**
+ * A repair may improve Fork shape but must not invalidate an already-satisfied invariant.
+ * Accept only if the repaired unresolved fork is not action-shaped and does not contradict
+ * confirmed completed facts (unless the current message explicitly supersedes them).
+ */
+export function chooseRepairedAnalysisResult(
+  original: AnalysisResult,
+  repaired: AnalysisResult | null,
+  context?: ForkRepairFactContext,
+): ForkRepairChoice {
+  if (original.decisionStatus === "resolved") {
+    return { result: original, usedRepair: false, reason: "original_resolved" };
+  }
+  if (!shouldRepairActionShapedFork(original)) {
+    return { result: original, usedRepair: false, reason: "original_not_action_shaped" };
+  }
+  if (!repaired) {
+    return { result: original, usedRepair: false, reason: "missing_or_unusable_repair" };
+  }
+  if (repaired.decisionStatus === "resolved") {
+    return { result: original, usedRepair: false, reason: "repaired_resolved" };
+  }
+  if (unresolvedForkLooksLikeActionMethods(repaired)) {
+    return { result: original, usedRepair: false, reason: "repaired_action_shaped" };
+  }
+  if (
+    unresolvedForkContradictsCompletedFacts(
+      repaired,
+      confirmedTextForRepair(context),
+      context?.currentMessage,
+    )
+  ) {
+    return { result: original, usedRepair: false, reason: "repaired_past_fact" };
+  }
+  return { result: repaired, usedRepair: true, reason: "accepted" };
+}
+
+type CompletedEventGuard = {
+  confirmed: RegExp[];
+  pendingRoute: RegExp[];
+  supersededBy: RegExp[];
+};
+
+const COMPLETED_EVENT_GUARDS: CompletedEventGuard[] = [
+  {
+    confirmed: [
+      /сделк[аиеу]\s+(?:уже\s+)?завершена/i,
+      /покупк[аи]\s+(?:уже\s+)?завершена/i,
+      /transaction completed/i,
+      /purchase completed/i,
+    ],
+    pendingRoute: [
+      /завершить\s+сделк/i,
+      /отложить\s+(?:её\s+|ее\s+)?завершени/i,
+      /complete(?:\s+the)?\s+(?:transaction|purchase|deal)/i,
+      /delay(?:\s+the)?\s+completion/i,
+    ],
+    supersededBy: [
+      /сделк\w*.{0,40}(?:ещё|еще)\s+не\s+заверш/i,
+      /сделк\w*.{0,20}не\s+завершена/i,
+      /покупк\w*.{0,40}(?:ещё|еще)\s+не\s+заверш/i,
+      /transaction.{0,40}not(?:\s+yet)?\s+complet/i,
+      /purchase.{0,40}not(?:\s+yet)?\s+complet/i,
+    ],
+  },
+  {
+    confirmed: [
+      /оплата\s+(?:уже\s+)?произведена/i,
+      /payment made/i,
+      /payment(?:\s+was)?(?:\s+already)?\s+made/i,
+    ],
+    pendingRoute: [/оплатить/i, /платить\s+сейчас/i, /pay\s+now/i, /(?:^|[^\p{L}])pay(?:\s+now)?\s+or\s+wait/iu],
+    supersededBy: [
+      /оплат\w*.{0,40}(?:ещё|еще)\s+не\s+(?:произведен|сделан)/i,
+      /payment.{0,40}not(?:\s+yet)?\s+(?:made|paid)/i,
+    ],
+  },
+  {
+    confirmed: [
+      /договор\w*\s+(?:уже\s+)?подписан/i,
+      /contract signed/i,
+      /contract has(?:\s+already)?\s+been\s+signed/i,
+    ],
+    pendingRoute: [
+      /подписать(?!н)/i,
+      /до\s+подписания/i,
+      /sign\s+now/i,
+      /sign\s+or\s+/i,
+      /before\s+signing/i,
+    ],
+    supersededBy: [
+      /договор\w*.{0,40}(?:ещё|еще)\s+не\s+подписан/i,
+      /contract.{0,40}not(?:\s+yet)?\s+sign/i,
+    ],
+  },
+];
+
+/** Advisory: unresolved fork still treats a confirmed completed event as a live future choice. */
+export function forkContradictsCompletedFacts(
+  fork: string,
+  confirmedText: string,
+  currentMessage?: string,
+): boolean {
+  const message = currentMessage ?? "";
+  return COMPLETED_EVENT_GUARDS.some(
+    (guard) =>
+      guard.confirmed.some((pattern) => pattern.test(confirmedText)) &&
+      !guard.supersededBy.some((pattern) => pattern.test(message)) &&
+      guard.pendingRoute.some((pattern) => pattern.test(fork)),
+  );
+}
+
+export function unresolvedForkContradictsCompletedFacts(
+  result: Pick<AnalysisResult, "decisionStatus" | "sections">,
+  confirmedText: string,
+  currentMessage?: string,
+): boolean {
+  if (result.decisionStatus === "resolved") return false;
+  const fork =
+    result.sections.find((section) => section.title === SECTION_TITLES[1])?.content?.trim() || "";
+  return forkContradictsCompletedFacts(fork, confirmedText, currentMessage);
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -299,6 +515,13 @@ export function normalizeAnalysisResult(raw: unknown): AnalysisResult {
     console.warn(
       "[analysis] output contains a discouraged generic phrase (kept anyway):",
       collectAnalysisText(result),
+    );
+  }
+
+  if (unresolvedForkLooksLikeActionMethods(result)) {
+    console.warn(
+      "[analysis] unresolved Main Decision Fork looks like fact-finding methods rather than decision routes (kept anyway):",
+      fork,
     );
   }
 

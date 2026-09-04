@@ -1,6 +1,6 @@
 import type { CaseLifecycleState } from "@prisma/client";
 import type { AnalysisResult, DecisionStatus } from "@/core/orchestration/analysis-core";
-import { RESOLVED_DETERMINING_FACT, SECTION_TITLES } from "@/core/orchestration/analysis-core";
+import { RESOLVED_DETERMINING_FACT, SECTION_TITLES, parseDecisionStatus } from "@/core/orchestration/analysis-core";
 import { isLifecycleState } from "@/lib/case-lifecycle";
 import type { ExecutionStatus, StoredExecution } from "@/lib/case-execution";
 import { isExecutionStatus } from "@/lib/case-execution";
@@ -245,6 +245,128 @@ export function buildDecisionCycleRecord(input: {
 
 export function appendDecisionCycle(raw: unknown, record: DecisionCycleRecord): DecisionCycleRecord[] {
   return [...parseDecisionCycleHistory(raw), record].slice(-MAX_DECISION_CYCLES);
+}
+
+export type PreviousDecisionCycleContext = {
+  decisionStatus: DecisionStatus | null;
+  outcome: string | null;
+  fork: string | null;
+  determiningFact: string | null;
+  resolutionStatement: string | null;
+  executionStep: string | null;
+  executionOwner: string | null;
+  executionStatus: ExecutionStatus | null;
+  executionUpdatedAt: string | null;
+  closedAt: string | null;
+  archivedAt: string;
+};
+
+function analysisSectionContent(analysis: unknown, title: string): string | null {
+  if (!isRecord(analysis) || !Array.isArray(analysis.sections)) return null;
+  for (const section of analysis.sections) {
+    if (!isRecord(section)) continue;
+    if (section.title !== title) continue;
+    const content = typeof section.content === "string" ? section.content.trim() : "";
+    return content || null;
+  }
+  return null;
+}
+
+function isResolvedArchivedCycle(cycle: DecisionCycleRecord): boolean {
+  const status = parseDecisionStatus(cycle.analysis);
+  if (status === "resolved") return true;
+  const fork = analysisSectionContent(cycle.analysis, SECTION_TITLES[1]);
+  return Boolean(fork?.startsWith("Решение определено:"));
+}
+
+/**
+ * Most recent archived cycle whose decision was resolved (completed historical cycle).
+ * Does not pass the full 20-cycle history onward.
+ */
+export function buildPreviousDecisionCycleContext(raw: unknown): PreviousDecisionCycleContext | null {
+  const cycles = parseDecisionCycleHistory(raw);
+  for (let index = cycles.length - 1; index >= 0; index -= 1) {
+    const cycle = cycles[index];
+    if (!isResolvedArchivedCycle(cycle)) continue;
+
+    const fork = analysisSectionContent(cycle.analysis, SECTION_TITLES[1]);
+    const status = parseDecisionStatus(cycle.analysis);
+    const resolutionStatement = fork?.startsWith("Решение определено:") ? fork : null;
+
+    return {
+      decisionStatus: status === "resolved" ? "resolved" : resolutionStatement ? "resolved" : status,
+      outcome: analysisSectionContent(cycle.analysis, SECTION_TITLES[0]),
+      fork,
+      determiningFact: analysisSectionContent(cycle.analysis, SECTION_TITLES[2]),
+      resolutionStatement,
+      executionStep: cycle.executionStep,
+      executionOwner: cycle.executionOwner,
+      executionStatus: cycle.executionStatus,
+      executionUpdatedAt: cycle.executionUpdatedAt,
+      closedAt: cycle.closedAt,
+      archivedAt: cycle.archivedAt,
+    };
+  }
+  return null;
+}
+
+/** Compact confirmed-text snippet for the existing Past-Fact helper (secondary to the prompt block). */
+export function previousCycleConfirmedText(context: PreviousDecisionCycleContext | null): string {
+  if (!context) return "";
+  const lines = [
+    context.resolutionStatement,
+    context.executionStatus === "completed" ? "execution completed" : null,
+    context.executionStep,
+    context.closedAt ? "cycle closed" : null,
+  ].filter((line): line is string => Boolean(line));
+  return lines.join("\n");
+}
+
+export function formatPreviousDecisionCyclePromptBlock(
+  context: PreviousDecisionCycleContext | null,
+): string {
+  if (!context) return "";
+
+  const lines = [
+    "PREVIOUS COMPLETED DECISION CYCLE",
+    `Status: ${context.decisionStatus ?? "resolved"}`,
+  ];
+  if (context.resolutionStatement) {
+    lines.push(`Resolution / outcome: ${context.resolutionStatement}`);
+  } else if (context.outcome) {
+    lines.push(`Resolution / outcome: ${context.outcome}`);
+  }
+  if (context.fork && context.fork !== context.resolutionStatement) {
+    lines.push(`Main Decision Fork: ${context.fork}`);
+  }
+  if (context.determiningFact) {
+    lines.push(`Determining Fact: ${context.determiningFact}`);
+  }
+  if (context.executionStep) {
+    lines.push(`Execution step: ${context.executionStep}`);
+  }
+  if (context.executionOwner) {
+    lines.push(`Execution owner: ${context.executionOwner}`);
+  }
+  if (context.executionStatus) {
+    lines.push(`Execution status: ${context.executionStatus}`);
+  }
+  if (context.executionUpdatedAt) {
+    lines.push(`Execution updated at: ${context.executionUpdatedAt}`);
+  }
+  if (context.closedAt) {
+    lines.push(`Closed at: ${context.closedAt}`);
+  }
+  lines.push(
+    "",
+    "This cycle is historical and completed.",
+    "Do not treat any decision, execution step, or route from this cycle as still pending or available unless the current user message explicitly says the historical record was wrong or the event was reversed.",
+    "Analyse only the NEW downstream uncertainty.",
+    "If the previous cycle confirms that a decision was resolved and its execution was completed, do not formulate the current Outcome, Fork, Priority, or Reply around performing that completed action again.",
+    "Priority must describe urgency of the CURRENT unresolved decision, not urgency of a completed historical action.",
+    "Reply must not tell the user to complete, delay, sign, pay, or otherwise repeat an action already recorded as completed.",
+  );
+  return lines.join("\n");
 }
 
 export function reopenLifecycleUpdate(suggestion: StoredReopenSuggestion): {

@@ -1,8 +1,14 @@
 # Family Office Brain — Decision Engine Specification
 
-Version: 1.2  
+Version: 1.5  
 Status: Normative  
 Path: `docs/architecture/decision-engine-spec.md`
+
+Changelog from v1.4: Previous Decision Cycle as hard historical context. The most recent completed `decisionCycleHistory` record is injected into analysis (and fork self-repair) as structured evidence. Free-text caseMemory / Past-Fact wording remains secondary. No extra model call. Reopen/lifecycle/execution mechanics unchanged. v1.4 also added one-shot action-shaped fork self-repair (max two model calls; monotonic Past-Fact acceptance).
+
+Changelog from v1.3: Past-Fact / Route Consistency Guard. Confirmed historical facts constrain the live route space. A completed or irreversible event cannot appear as a future branch of Main Decision Fork unless the current user message explicitly corrects or supersedes that fact. A completed decision plus a new downstream problem is a new decision cycle, not a reconstruction of the old one. Resolved analyses keep resolution-statement behavior and skip this guard.
+
+Changelog from v1.2: Fork–Fact–Actions Separation. For unresolved analyses, Main Decision Fork is two materially different decision routes/outcomes, Determining Fact selects between those routes, and Actions are only methods to obtain or confirm the fact. Method-vs-method forks (expertise vs waiting, request vs lawyer) are invalid. Resolved analyses keep the resolution-statement behavior and skip this validation.
 
 Changelog from v1.1: added `decisionStatus` (`unresolved` | `resolved`). An analysis may now terminate the decision fork when the relevant uncertainty is gone, without inventing a new Determining Fact to preserve the five-section shape. Resolved is not case closure: execution may continue after the decision is determined.
 
@@ -35,9 +41,9 @@ The knowledge base — historical cases, validated principles, decision question
 
 ### 2.1. One case — one main decision fork
 
-Every **unresolved** analysis must identify one main fork. If several forks appear equally important, the engine has not yet found the real decision point.
+Every **unresolved** analysis must identify one main fork. If several forks appear equally important, the engine has not yet found the real decision point. The fork is a choice between decision routes/outcomes, not between investigation methods.
 
-When the decision is **resolved**, do not fabricate a new binary fork. Keep the Main Decision Fork section, but fill it with a concise resolution statement (for example: «Решение определено: завершить сделку в согласованный срок.»).
+When the decision is **resolved**, do not fabricate a new binary fork. Keep the Main Decision Fork section, but fill it with a concise resolution statement (for example: «Решение определено: завершить сделку в согласованный срок.»). Do not run Fork–Fact–Actions pair validation against a resolution statement.
 
 ### 2.2. One fork — one determining fact
 
@@ -80,6 +86,36 @@ A decision can be resolved while the case is still executing. Example: the Princ
 
 The engine must not invent new uncertainty merely to preserve the five-section output structure. It must not ask to reconfirm facts already recorded in case memory unless the user explicitly says circumstances changed. If case memory says the Principal already approved the route, the engine must not pretend a Principal decision is still pending.
 
+### 2.10. Confirmed historical facts constrain the route space
+
+A completed or irreversible event cannot appear as a future branch of Main Decision Fork unless the current user message explicitly corrects or supersedes that fact, or the event is shown to be reversible.
+
+**Old decision ≠ new downstream decision.** When a completed decision creates a new problem further down the chain, analyse that new uncertainty as a new decision cycle. Do not reconstruct the already-completed decision.
+
+Confirmed: “The purchase completed.”
+
+- Bad: “Complete or delay completion.”
+- Good: “New municipal review creates owner obligations or no additional obligations.”
+
+### 2.11. Previous Decision Cycle Context
+
+`decisionCycleHistory` is structured historical decision evidence. The most recent completed cycle — not the full 20-cycle archive — is passed to analysis as a dedicated **PREVIOUS COMPLETED DECISION CYCLE** block.
+
+Rules:
+
+- the most recent completed cycle constrains the current route space;
+- completed execution is not a live route;
+- a new downstream uncertainty starts a new decision cycle;
+- old decision ≠ new decision;
+- explicit correction or reversal in the current user message may supersede historical context.
+
+This constrains Outcome, Main Decision Fork, Determining Fact, Priority, and Reply. Reopen suggestion remains deterministic from the analysis; if the analysis is about the new cycle, the suggestion is too. Lifecycle stays human-controlled.
+
+Previous cycle: purchase resolved, execution completed.
+
+- Bad Outcome: “Complete the purchase without legal risk.”
+- Good Outcome: “Minimise post-completion legal and financial exposure arising from the municipal reconsideration.”
+
 ---
 
 ## 3. Decision Flow
@@ -88,13 +124,16 @@ The engine must not invent new uncertainty merely to preserve the five-section o
 Input
   ↓
 1. Normalize the case (internal)
+     confirmed / unresolved / assumptions / irreversible completed events
+  ↓
+1b. Remove routes that confirmed facts have already made impossible (internal; unresolved only)
   ↓
 2. Define the desired outcome            → public: Outcome
   ↓
 2a. Resolution check (internal)          → public: decisionStatus
   ↓
 3. Identify the main decision fork       → public: Main Decision Fork
-     (or a resolution statement if resolved)
+     (live routes only; or a resolution statement if resolved)
   ↓
 4. Identify the determining fact         → public: Determining Fact
      (or the terminal “no further fact required” value if resolved)
@@ -106,14 +145,14 @@ Input
      (unresolved: fact-gathering; resolved: execution steps only)
   ↓
 7. Check how the route would change      → INTERNAL ONLY, not rendered (see §4.7)
-     (skip when resolved)
+     plus Fork–Fact–Actions and Past-Fact consistency (skip when resolved)
   ↓
 8. Compute Priority + Reply              → public: Priority, Reply
   ↓
 9. Stop and wait for new evidence
 ```
 
-Steps 2–6 and 8 map directly onto the current `AnalysisResult` shape (`decisionStatus`, `sections[0..4]`, `priority`, `reply`). Step 2a is prompt discipline plus a stored field; it is not a new card. Step 7 is new discipline, not a new visible field.
+Steps 2–6 and 8 map directly onto the current `AnalysisResult` shape (`decisionStatus`, `sections[0..4]`, `priority`, `reply`). Step 2a is prompt discipline plus a stored field; it is not a new card. Steps 1b and 7 are reasoning discipline, not new visible fields. Fork–Fact–Actions validation happens only after impossible historical routes have been eliminated.
 
 ---
 
@@ -131,6 +170,7 @@ Rules:
 - Do not infer causation from chronology alone.
 - Do not add facts from other cases.
 - Preserve the user's wording where it affects meaning.
+- Identify irreversible / already completed events. Confirmed caseMemory facts actively constrain later routes; they are not background colour.
 
 ### 4.2. Define the Desired Outcome
 
@@ -154,14 +194,51 @@ Do not confuse resolved decision with closed case. Lifecycle suggestion may rece
 
 ### 4.3. Identify the Main Decision Fork
 
+**Main Decision Fork is not “what should we do to find out?” It is “which decision route applies once the determining fact is known?”**
+
+| Piece | Meaning |
+| --- | --- |
+| Fork | two materially different decision routes, consequences, or outcomes |
+| Fact | the one fact that selects between those routes |
+| Actions | methods to obtain or confirm that fact |
+
+A valid unresolved fork answers: if the determining fact is X, which route becomes appropriate? If it is not X, which different route becomes appropriate?
+
+The fork must **not** primarily describe actions, investigations, information-gathering methods, people to contact, requests to send, waiting versus asking, or expert review versus authority confirmation. Those belong in Actions unless they are genuinely alternative strategic routes.
+
+**Invalid (methods, not routes):** «Провести экспертизу или ждать ответа.»
+
+**Valid (routes selected by a fact):** «Повторное рассмотрение создаёт для нового собственника существенные обязательства / риск либо не требует дополнительных действий.» — selected by whether the authority requires additional expertise, works, or other obligatory steps.
+
+**Confirmed historical facts constrain the route space.** A completed or irreversible event cannot appear as a future branch of Main Decision Fork unless explicitly corrected or shown to be reversible.
+
+Confirmed: “The purchase completed.”
+
+- Bad: “Complete or delay completion.”
+- Good: “New municipal review creates owner obligations or no additional obligations.”
+
+Old decision ≠ new downstream decision. Do not propose a route that contradicts a confirmed caseMemory fact unless the current user message explicitly corrects or supersedes that fact.
+
 Output:
 
-- unresolved — one concrete, case-specific fork that creates materially different routes;
-- resolved — a concise resolution statement, not a fabricated binary fork.
+- unresolved — one concrete, case-specific fork that creates materially different **decision routes / consequences / outcomes**, not a pair of fact-finding methods;
+- resolved — a concise resolution statement, not a fabricated binary fork. Do **not** apply Fork–Fact–Actions or Past-Fact validation as if the analysis were unresolved.
 
-Renders as section "🌳 Main Decision Fork". The section stays even when resolved, because the existing UI expects it.
+Renders as section "🌳 Main Decision Fork". The section stays even when resolved, because the existing UI expects it. The A–D Fork–Fact–Actions check is internal only and must not appear in UI or reply.
+
+If an **unresolved** AI result is otherwise usable but Main Decision Fork is flagged by `unresolvedForkLooksLikeActionMethods` (action/method-shaped, including wait vs act), the engine may make **one** additional model call to rewrite the fork as the two states selected by the Determining Fact. Normal analysis is one model call; this path is at most two total. There is no loop.
+
+A repair may improve an analysis but must not invalidate an already-satisfied Decision Engine invariant. The repaired result replaces the original only if it is still unresolved, not action-shaped, **and** does not contradict confirmed completed facts (`unresolvedForkContradictsCompletedFacts`, using caseMemory plus the current user message). An explicit correction in the current message may supersede old memory; without it, reconstructing a completed decision (for example complete vs delay after «Сделка завершена») is rejected and the original usable result is kept. No second repair call. If the repair fails, returns invalid JSON, is still action-shaped, or breaks Past-Fact consistency, keep the first usable result and log why. Resolved analyses never enter this repair path. Do not repair merely stylistic wording. Lifecycle suggestion remains a separate, unchanged call.
 
 ### 4.4. Identify the Determining Fact
+
+The Determining Fact is the **route selector**. Internally (unresolved only), the model must verify:
+
+- Does this fact actually decide between the two fork routes?
+- If confirmed, does at least one route become inappropriate or impossible?
+- If disproved, does a materially different route become appropriate?
+
+If not, the fork/fact pair is invalid and must be rewritten before JSON output. This strengthens the existing internal route-change check (§4.7). Skip this pair-validation when `decisionStatus = resolved`.
 
 Output:
 
@@ -187,6 +264,8 @@ Rules:
 
 ### 4.6. Define Minimum Actions
 
+Actions answer: **how do we obtain or confirm the Determining Fact?** They stay operational: contact an authority, request a document, obtain an expert report, inspect an asset, get a legal opinion. Do not promote these methods into the Main Decision Fork unless they are genuinely alternative strategic routes rather than fact-finding methods.
+
 Output:
 
 - unresolved — the minimum actions required to obtain the fact;
@@ -205,7 +284,25 @@ This constraint exists specifically to fight the vague, unfocused output the tea
 
 ### 4.7. Internal Route-Change Check — reasoning only, never rendered
 
-This stage exists **for the model's own reasoning quality, not for the user.** It applies only while `decisionStatus = unresolved`. Before finalizing the Determining Fact, the model should internally check: if this fact is confirmed, what becomes impossible? If disproved? If it cannot be established in time? A determining fact that doesn't cleanly split into at least two of these is probably not sharp enough, and the model should revise steps 4.4–4.6 before responding.
+This stage exists **for the model's own reasoning quality, not for the user.** It applies only while `decisionStatus = unresolved`. Before finalizing the Determining Fact, the model should internally check: if this fact is confirmed, what becomes impossible? If disproved? If it cannot be established in time? A determining fact that doesn't cleanly split into at least two of these is probably not sharp enough, and the model should revise the Fork, Determining Fact, and Actions before responding.
+
+The same internal pass includes Fork–Fact–Actions Separation (unresolved only, never shown in UI):
+
+- **A. Fork test** — both sides are actual decision routes/outcomes, not methods.
+- **B. Fact test** — one factual answer selects between those routes.
+- **C. Action test** — actions are only methods to obtain or confirm that fact.
+- **D. Leakage test** — no action accidentally appears inside Main Decision Fork. If D = yes, rewrite the fork.
+
+Do not apply A–D when `decisionStatus = resolved`.
+
+The same internal pass includes Past-Fact Consistency (unresolved only, never shown in UI). For each side of Main Decision Fork:
+
+1. Is this route still physically, legally, or operationally available?
+2. Does it contradict any confirmed fact?
+3. Does it assume an already completed event is still pending?
+4. Is this actually an old decision rather than the current new uncertainty?
+
+If any answer indicates inconsistency, rewrite the fork before output. Skip this guard for resolution statements (`decisionStatus = resolved`).
 
 **This must not be exposed as a rendered section, a UI element, or explanatory text in the chat reply.** The user explicitly rejected this ("факт-подтверждён, факт-опровергнут — не нужен этот блок") when it was a visible six-section block, and that decision stands for anything user-facing.
 
@@ -312,9 +409,12 @@ An analysis passes only if:
 - `decisionStatus` is `unresolved` or `resolved`, and matches whether a genuine fork remains;
 - unresolved: there is one outcome, one main fork, one determining fact;
 - unresolved: the fact removes at least one route when confirmed;
+- unresolved: Fork is decision routes, Fact is the route selector, Actions are fact-acquisition methods — not a method-vs-method fork;
+- unresolved: both fork routes are still possible given confirmed facts; a completed event is not treated as a live future branch;
 - unresolved: the fact owner can actually confirm it;
 - unresolved: every action contributes directly to obtaining the fact (max 4);
 - resolved: the engine did not invent a new uncertainty, a fake Principal wait, or a reconfirmation of an already-known fact;
+- resolved: Fork–Fact–Actions validation was not applied as if the analysis were still unresolved;
 - no causal statement is presented without evidence;
 - the internal route-change check (§4.7) was performed when unresolved, even though it is never rendered;
 - authority boundaries (§6) are respected in the Reply text — the engine must not casually recommend an action that §6 would require escalating.
@@ -344,7 +444,37 @@ The Decision Engine is not:
 
 ---
 
-## 13. Definition of Done for v1.2
+## 13. Definition of Done for v1.2 / v1.3 / v1.4 / v1.5
+
+v1.5:
+
+- Most recent completed `decisionCycleHistory` cycle is compact historical context for analysis and one-shot fork repair. Not the full archive.
+- Outcome, Fork, Priority, and Reply must not reconstruct a completed historical action unless the current message explicitly corrects or reverses it.
+- Reopen suggestion stays deterministic from analysis. Lifecycle remains human-controlled. No extra AI call.
+
+v1.4 amendment — action-shaped fork self-repair:
+
+- Unresolved analyses whose Main Decision Fork is flagged as action/method-shaped may receive **one** repair model call. Maximum 2 model calls total. No recursive repair.
+- Repair is accepted only if it restores Fork shape **without** breaking Past-Fact consistency. Otherwise keep the first usable result.
+- Repair output is normalized the same way as any other analysis. Failure keeps the first usable result.
+- Resolved analyses skip repair. Lifecycle / reopen / execution are unchanged.
+
+v1.4:
+
+- Confirmed historical facts constrain unresolved Main Decision Fork. Completed/irreversible events cannot be future branches unless explicitly corrected or shown to be reversible.
+- Prompt includes an internal Past-Fact Consistency Test, not shown in UI. Fork–Fact–Actions runs only after impossible historical routes are removed.
+- Soft advisory helper may warn when an unresolved fork still treats a confirmed completed event as pending; it must not hard-fail.
+- Reopen / lifecycle / execution mechanics are unchanged. A closed case may receive a new unresolved analysis about the downstream issue; the engine must not auto-reopen or reconstruct the completed decision.
+- Resolved analyses keep the resolution-statement behavior and skip this guard.
+
+v1.3:
+
+- Unresolved Main Decision Fork is decision routes/outcomes, not fact-finding methods. Determining Fact selects the route. Actions obtain/confirm the fact.
+- Prompt includes an internal A–D Fork–Fact–Actions check, not shown in UI.
+- Soft advisory helper may warn on obviously action-shaped unresolved forks; it must not hard-fail valid analyses.
+- Resolved analyses keep the v1.2 resolution-statement behavior and skip Fork–Fact pair validation.
+
+v1.2:
 
 - `AnalysisResult` stores additive `decisionStatus`: `unresolved` | `resolved`. Missing values default to `unresolved`.
 - Unresolved analyses keep the previous five-section rules (fork + determining fact + sources + fact-gathering actions).

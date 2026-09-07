@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { applyReopenSuggestion, dismissReopenSuggestion } from "@/app/cases/[id]/actions";
+import { workspaceReopenSurfaceClass, workspaceType } from "@/app/cases/[id]/workspace-ui";
 import { lifecycleLabel } from "@/lib/case-lifecycle";
 import type { StoredReopenSuggestion } from "@/lib/decision-cycle";
 
@@ -29,16 +30,15 @@ export function CaseReopenSuggestionCard({ caseId, suggestion }: CaseReopenSugge
   }
 
   return (
-    <section className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3">
-      <h2 className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-        FO Brain рекомендует возобновить кейс
-      </h2>
-      <p className="mt-1.5 text-sm text-zinc-800">{suggestion.reason}</p>
-      <p className="mt-2 text-xs font-medium uppercase tracking-wide text-zinc-400">
-        Новая неопределённость
-      </p>
-      <p className="mt-0.5 text-sm font-medium text-zinc-900">{suggestion.fork}</p>
-      <p className="mt-2 text-xs text-zinc-500">
+    <section className={workspaceReopenSurfaceClass}>
+      <p className={workspaceType.kicker}>FO Brain</p>
+      <p className={`mt-2 ${workspaceType.section}`}>Рекомендует возобновить кейс</p>
+      {suggestion.reason && (
+        <p className={`mt-1 line-clamp-2 ${workspaceType.muted}`}>{suggestion.reason}</p>
+      )}
+      <p className={`mt-3 ${workspaceType.muted}`}>Новая неопределённость</p>
+      <p className={`mt-0.5 ${workspaceType.primary}`}>{suggestion.fork}</p>
+      <p className={`mt-1 ${workspaceType.muted}`}>
         После подтверждения: {lifecycleLabel(suggestion.recommendedState)}
       </p>
       <div className="mt-3 flex flex-wrap gap-2">

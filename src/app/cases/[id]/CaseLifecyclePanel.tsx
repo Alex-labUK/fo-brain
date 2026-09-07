@@ -21,6 +21,7 @@ type CaseLifecyclePanelProps = {
   blockerNote: string | null;
   lifecycleUpdatedAt: string;
   renderedAt: string;
+  bare?: boolean;
 };
 
 export function CaseLifecyclePanel({
@@ -30,6 +31,7 @@ export function CaseLifecyclePanel({
   blockerNote,
   lifecycleUpdatedAt,
   renderedAt,
+  bare = false,
 }: CaseLifecyclePanelProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -63,12 +65,16 @@ export function CaseLifecyclePanel({
     });
   }
 
+  const wrapClass = bare
+    ? "space-y-3"
+    : "rounded-xl border border-zinc-200 bg-white px-4 py-3 shadow-sm";
+
   return (
-    <section className="rounded-xl border border-zinc-200 bg-white px-4 py-3 shadow-sm">
-      <h2 className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-        Жизненный цикл
-      </h2>
-      <p className="mt-1.5 text-sm font-medium text-zinc-900">{lifecycleLabel(lifecycleState)}</p>
+    <section className={wrapClass}>
+      {!bare && (
+        <h2 className="text-xs font-medium uppercase tracking-wide text-zinc-500">Жизненный цикл</h2>
+      )}
+      <p className={`${bare ? "mt-0" : "mt-1.5"} text-sm font-medium text-zinc-900`}>{lifecycleLabel(lifecycleState)}</p>
       {isBlockerApplicable(blockerType) && (
         <p className="mt-0.5 text-xs text-zinc-500">{blockerLabel(blockerType)}</p>
       )}

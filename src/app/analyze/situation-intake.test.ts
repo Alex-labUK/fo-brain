@@ -78,7 +78,7 @@ assert(savePath.includes("messages:"), "H: existing saveAnalysisAsCase still wri
 assert(savePath.includes("generateLifecycleSuggestion"), "H: existing save path remains compatible");
 
 const casePage = readFileSync(path.join(root, "src/app/cases/[id]/page.tsx"), "utf8");
-assert(casePage.includes("← К решениям"), "case page back link is К решениям");
+assert(casePage.includes("← Решения"), "case page back link is Решения");
 assert(casePage.includes('href="/cases"'), "case page back link goes to /cases");
 assert(!casePage.includes("К библиотеке кейсов"), "old library back link is gone");
 assert(!casePage.includes("{caseItem.id} · {formatDomain(caseItem.domain)}"), "technical id/domain line is hidden");

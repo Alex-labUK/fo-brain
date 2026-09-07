@@ -6,16 +6,19 @@ import {
   applyLifecycleSuggestion,
   dismissLifecycleSuggestion,
 } from "@/app/cases/[id]/actions";
+import { workspaceGuidanceSurfaceClass, workspaceType } from "@/app/cases/[id]/workspace-ui";
 import { lifecycleLabel, type LifecycleSuggestion } from "@/lib/case-lifecycle";
 
 type CaseLifecycleSuggestionCardProps = {
   caseId: string;
   suggestion: LifecycleSuggestion;
+  showReason?: boolean;
 };
 
 export function CaseLifecycleSuggestionCard({
   caseId,
   suggestion,
+  showReason = true,
 }: CaseLifecycleSuggestionCardProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -33,16 +36,19 @@ export function CaseLifecycleSuggestionCard({
     });
   }
 
+  const detail =
+    suggestion.blockerNote ||
+    (showReason && suggestion.reason && suggestion.reason !== suggestion.blockerNote
+      ? suggestion.reason
+      : null);
+
   return (
-    <section className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3">
-      <h2 className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-        FO Brain рекомендует
-      </h2>
-      <p className="mt-1.5 text-sm font-medium text-zinc-900">{lifecycleLabel(suggestion.state)}</p>
-      {suggestion.blockerNote && (
-        <p className="mt-1 text-sm text-zinc-700">{suggestion.blockerNote}</p>
-      )}
-      <p className="mt-1 text-xs text-zinc-500">{suggestion.reason}</p>
+    <section className={workspaceGuidanceSurfaceClass}>
+      <p className={workspaceType.kicker}>FO Brain</p>
+      <p className={`mt-2 ${workspaceType.section}`}>
+        Рекомендует → {lifecycleLabel(suggestion.state)}
+      </p>
+      {detail && <p className={`mt-1.5 ${workspaceType.muted}`}>{detail}</p>}
       <div className="mt-3 flex flex-wrap gap-2">
         <button
           type="button"

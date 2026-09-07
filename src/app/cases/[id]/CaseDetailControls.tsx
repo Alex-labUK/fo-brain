@@ -15,9 +15,10 @@ export type CaseDetailData = {
 
 type CaseDetailControlsProps = {
   caseItem: CaseDetailData;
+  embedded?: boolean;
 };
 
-export function CaseDetailControls({ caseItem }: CaseDetailControlsProps) {
+export function CaseDetailControls({ caseItem, embedded = false }: CaseDetailControlsProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -84,10 +85,10 @@ export function CaseDetailControls({ caseItem }: CaseDetailControlsProps) {
   }
 
   return (
-    <div className="mt-6">
-      <section className="rounded-xl border border-zinc-200 bg-white px-5 py-4 shadow-sm">
-        <h2 className="text-sm font-semibold text-zinc-900">Действия</h2>
-        <div className="mt-3 flex flex-wrap gap-2">
+    <div className={embedded ? "" : "mt-6"}>
+      <section className={embedded ? "" : "rounded-xl border border-zinc-200 bg-white px-5 py-4 shadow-sm"}>
+        {!embedded && <h2 className="text-sm font-semibold text-zinc-900">Действия</h2>}
+        <div className={embedded ? "flex flex-wrap gap-2" : "mt-3 flex flex-wrap gap-2"}>
           {isActive && (
             <>
               <button

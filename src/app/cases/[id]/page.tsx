@@ -1,8 +1,5 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AnalysisSections } from "@/components/AnalysisSections";
-import { PriorityBadge } from "@/components/PriorityBadge";
-import { CaseStatusBadge } from "@/components/StatusBadge";
 import { CaseDetailControls } from "@/app/cases/[id]/CaseDetailControls";
 import { CaseDialogueLauncher } from "@/app/cases/[id]/CaseDialogueLauncher";
 import { CaseExecutionPanel } from "@/app/cases/[id]/CaseExecutionPanel";
@@ -10,8 +7,18 @@ import { CaseExecutionSuggestionCard } from "@/app/cases/[id]/CaseExecutionSugge
 import { CaseLifecyclePanel } from "@/app/cases/[id]/CaseLifecyclePanel";
 import { CaseLifecycleSuggestionCard } from "@/app/cases/[id]/CaseLifecycleSuggestionCard";
 import { CaseReopenSuggestionCard } from "@/app/cases/[id]/CaseReopenSuggestionCard";
-import { CollapsibleCaseBlock } from "@/app/cases/[id]/CollapsibleCaseBlock";
-import { decisionStatusLabel, normalizeAnalysisResult } from "@/core/orchestration/analysis-core";
+import { WorkspaceDetails } from "@/app/cases/[id]/WorkspaceDetails";
+import {
+  workspaceDecisionSurfaceClass,
+  workspaceFactInsetClass,
+  workspaceNextStepMarkerClass,
+  workspaceNextStepOwnerLine,
+  workspaceNextStepSurfaceClass,
+  workspacePriorityBadgeClass,
+  workspaceStatusBadgeClass,
+  workspaceType,
+} from "@/app/cases/[id]/workspace-ui";
+import { normalizeAnalysisResult } from "@/core/orchestration/analysis-core";
 import { visibleLifecycleSuggestion } from "@/lib/case-lifecycle";
 import {
   deriveExecutionSuggestion,
@@ -21,15 +28,22 @@ import {
 } from "@/lib/case-execution";
 import { parseDecisionCycleHistory, visibleReopenSuggestion } from "@/lib/decision-cycle";
 import { ensureSeeded } from "@/lib/ensure-seeded";
-import {
-  computePriorityColor,
-  parseStake,
-  parseUrgency,
-  priorityColorBadgeClass,
-  priorityColorLabels,
-  priorityColorMarkerClass,
-} from "@/lib/priority";
+import { computePriorityColor, parseStake, parseUrgency, priorityColorMarkerClass } from "@/lib/priority";
 import { prisma } from "@/lib/prisma";
+import {
+  formatWorkspaceDate,
+  isRepetitiveWorkspaceExplanation,
+  previousCyclePreview,
+  previousCyclesLabel,
+  shouldShowFactGatheringNextStep,
+  workspaceActionFirstNextStep,
+  workspaceDecision,
+  workspaceDeterminingFact,
+  workspaceExecutionPlacement,
+  workspaceOperationalStatus,
+  workspaceOutcome,
+  workspacePriorityLabel,
+} from "@/lib/case-workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -73,6 +87,11 @@ export default async function CaseDetailPage({ params }: PageProps) {
     parseUrgency(caseItem.priorityUrgency),
     parseStake(caseItem.priorityStake),
   );
+  const priorityLabel = workspacePriorityLabel(priorityColor);
+  const operationalStatus = workspaceOperationalStatus({
+    lifecycleState: caseItem.lifecycleState,
+    executionStatus: caseItem.executionStatus,
+  });
   const lifecycleSuggestion = visibleLifecycleSuggestion(caseItem.lifecycleSuggestion, {
     lifecycleState: caseItem.lifecycleState,
     blockerNote: caseItem.blockerNote,
@@ -98,134 +117,230 @@ export default async function CaseDetailPage({ params }: PageProps) {
     lifecycleState: caseItem.lifecycleState,
     analysis: storedAnalysis,
   });
-  const previousCycleCount = parseDecisionCycleHistory(caseItem.decisionCycleHistory).length;
+  const previousCycles = parseDecisionCycleHistory(caseItem.decisionCycleHistory);
   const renderedAt = new Date().toISOString();
+  const outcomeText = workspaceOutcome(storedAnalysis) || caseItem.outcome?.statement?.trim() || null;
+  const decisionText = workspaceDecision(storedAnalysis) || (!storedAnalysis ? caseItem.recordedResult : null);
+  const determiningFact = workspaceDeterminingFact(storedAnalysis);
+  const nextStep = workspaceActionFirstNextStep(storedAnalysis);
+  const showFactGathering = shouldShowFactGatheringNextStep(storedAnalysis);
+  const executionPlacement = workspaceExecutionPlacement({
+    hasExecution: hasStoredExecution(storedExecution),
+    decisionStatus,
+    executionStatus: storedExecution.executionStatus,
+    lifecycleState: caseItem.lifecycleState,
+  });
+  const showResolvedNextStep =
+    decisionStatus === "resolved" &&
+    (executionPlacement === "primary" || Boolean(executionSuggestion));
+  const priorityNote = caseItem.priorityNote?.trim() || null;
+  const showDecisionBlock = Boolean(outcomeText || decisionText || determiningFact || priorityNote);
+  const decisionSurfaceResolved =
+    decisionStatus === "resolved" || caseItem.lifecycleState === "closed";
+  const showLifecycleReason =
+    Boolean(lifecycleSuggestion?.reason) &&
+    !isRepetitiveWorkspaceExplanation(lifecycleSuggestion?.reason ?? "", [
+      determiningFact,
+      nextStep.primary,
+      nextStep.support,
+    ]);
+
+  const executionPanel =
+    storedExecution.executionStatus && storedExecution.executionStep ? (
+      <CaseExecutionPanel
+        caseId={caseItem.id}
+        executionStep={storedExecution.executionStep}
+        executionOwner={storedExecution.executionOwner}
+        executionStatus={storedExecution.executionStatus}
+        executionUpdatedAt={caseItem.executionUpdatedAt?.toISOString() ?? null}
+        renderedAt={renderedAt}
+        needsReview={needsReview}
+        showClosePrompt={showClosePrompt}
+        tone={executionPlacement === "primary" ? "default" : "quiet"}
+        hideTitle={executionPlacement === "primary"}
+      />
+    ) : null;
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-6 py-6">
-      <Link href="/cases" className="text-sm text-zinc-500 hover:text-zinc-700">
-        ← К решениям
+    <main className="mx-auto w-full max-w-2xl px-6 py-8 font-sans">
+      <Link href="/cases" className={`${workspaceType.muted} hover:text-zinc-700`}>
+        ← Решения
       </Link>
 
-      <div className="mt-4 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">{caseItem.title}</h1>
-          {caseItem.outcome && (
-            <p className="mt-1 text-sm text-zinc-500">
-              <Link href={`/outcomes/${caseItem.outcome.id}`} className="underline">
-                outcome
-              </Link>
-            </p>
-          )}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+      <h1 className={`mt-4 ${workspaceType.title}`}>{caseItem.title}</h1>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <span
+          className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${workspaceStatusBadgeClass(
+            {
+              lifecycleState: caseItem.lifecycleState,
+              executionStatus: caseItem.executionStatus,
+            },
+          )}`}
+        >
+          {operationalStatus}
+        </span>
+        {priorityLabel && (
           <span
-            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${priorityColorBadgeClass(priorityColor)}`}
+            className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium ${workspacePriorityBadgeClass(priorityColor)}`}
           >
-            <span className={`h-2 w-2 rounded-full ${priorityColorMarkerClass(priorityColor)}`} />
-            {priorityColorLabels[priorityColor]}
+            <span className={`h-1.5 w-1.5 rounded-full ${priorityColorMarkerClass(priorityColor)}`} aria-hidden />
+            {priorityLabel}
           </span>
-          <CaseStatusBadge status={caseItem.status} />
-        </div>
+        )}
       </div>
 
-      <details className="group mt-6 rounded-xl border border-zinc-200 bg-white shadow-sm">
-        <summary className="cursor-pointer list-none px-4 py-2.5 text-sm font-semibold text-zinc-900 marker:content-none [&::-webkit-details-marker]:hidden">
-          <span className="flex items-center justify-between gap-2">
-            Действия
-            <span className="text-xs font-normal text-zinc-400 group-open:hidden">показать</span>
-            <span className="hidden text-xs font-normal text-zinc-400 group-open:inline">скрыть</span>
-          </span>
-        </summary>
-        <div className="border-t border-zinc-100 px-4 pb-3 pt-2 [&>div]:mt-0 [&_section]:border-0 [&_section]:bg-transparent [&_section]:p-0 [&_section]:shadow-none [&_section_h2]:hidden">
-          <CaseDetailControls
-            caseItem={{
-              id: caseItem.id,
-              title: caseItem.title,
-              domain: caseItem.domain,
-              status: caseItem.status,
-            }}
+      {reopenSuggestion && (
+        <div className="mt-6">
+          <CaseReopenSuggestionCard caseId={caseItem.id} suggestion={reopenSuggestion} />
+        </div>
+      )}
+
+      {showDecisionBlock && (
+        <section className={`mt-6 ${workspaceDecisionSurfaceClass(decisionSurfaceResolved)}`}>
+          <p className={workspaceType.kicker}>Решение</p>
+          {outcomeText && (
+            <p className={`mt-2 ${workspaceType.muted}`}>
+              Цель:{" "}
+              {caseItem.outcome ? (
+                <Link href={`/outcomes/${caseItem.outcome.id}`} className="text-zinc-600 hover:text-zinc-900 hover:underline">
+                  {outcomeText}
+                </Link>
+              ) : (
+                <span className="text-zinc-600">{outcomeText}</span>
+              )}
+            </p>
+          )}
+          {decisionText && <p className={`mt-2 ${workspaceType.primary}`}>{decisionText}</p>}
+          {determiningFact && (
+            <div className={`mt-4 ${workspaceFactInsetClass}`}>
+              <p className={`${workspaceType.kicker} text-amber-800/80`}>Что определит решение</p>
+              <p className={`mt-1 ${workspaceType.fact}`}>{determiningFact}</p>
+            </div>
+          )}
+          {priorityNote && <p className={`mt-3 ${workspaceType.muted}`}>{priorityNote}</p>}
+        </section>
+      )}
+
+      {showFactGathering && (
+        <section className={`mt-5 ${workspaceNextStepSurfaceClass}`}>
+          <p className={workspaceType.kicker}>Следующий шаг</p>
+          {nextStep.primary && (
+            <div className="mt-3 flex items-start gap-3">
+              <span className={workspaceNextStepMarkerClass} aria-hidden>
+                1
+              </span>
+              <p className={workspaceType.primary}>{nextStep.primary}</p>
+            </div>
+          )}
+          {nextStep.support && <p className={`mt-2 pl-9 ${workspaceType.muted}`}>{nextStep.support}</p>}
+          {nextStep.owner && (
+            <p className={`mt-3 pl-9 ${workspaceType.muted}`}>{workspaceNextStepOwnerLine(nextStep.owner)}</p>
+          )}
+        </section>
+      )}
+
+      {showResolvedNextStep && executionPlacement === "primary" && (
+        <section className={`mt-6 ${workspaceNextStepSurfaceClass}`}>
+          <p className={workspaceType.kicker}>Следующий шаг</p>
+          <div className="mt-3">{executionPanel}</div>
+        </section>
+      )}
+
+      {showResolvedNextStep && executionSuggestion && (
+        <div className="mt-6">
+          <CaseExecutionSuggestionCard caseId={caseItem.id} suggestion={executionSuggestion} />
+        </div>
+      )}
+
+      {lifecycleSuggestion && (
+        <div className="mt-6">
+          <CaseLifecycleSuggestionCard
+            caseId={caseItem.id}
+            suggestion={lifecycleSuggestion}
+            showReason={showLifecycleReason}
           />
         </div>
-      </details>
+      )}
 
-      <section className="mt-6 space-y-4">
-        <CaseLifecyclePanel
-          caseId={caseItem.id}
-          lifecycleState={caseItem.lifecycleState}
-          blockerType={caseItem.blockerType}
-          blockerNote={caseItem.blockerNote}
-          lifecycleUpdatedAt={caseItem.lifecycleUpdatedAt.toISOString()}
-          renderedAt={renderedAt}
-        />
-        {previousCycleCount > 0 && (
-          <p className="text-xs text-zinc-400">Предыдущих циклов решений: {previousCycleCount}</p>
-        )}
-        {reopenSuggestion && (
-          <CaseReopenSuggestionCard caseId={caseItem.id} suggestion={reopenSuggestion} />
-        )}
-        {hasStoredExecution(storedExecution) && storedExecution.executionStatus && storedExecution.executionStep && (
-          <CaseExecutionPanel
-            caseId={caseItem.id}
-            executionStep={storedExecution.executionStep}
-            executionOwner={storedExecution.executionOwner}
-            executionStatus={storedExecution.executionStatus}
-            executionUpdatedAt={caseItem.executionUpdatedAt?.toISOString() ?? null}
-            renderedAt={renderedAt}
-            needsReview={needsReview}
-            showClosePrompt={showClosePrompt}
-          />
-        )}
-        {executionSuggestion && (
-          <CaseExecutionSuggestionCard caseId={caseItem.id} suggestion={executionSuggestion} />
-        )}
-        {lifecycleSuggestion && (
-          <CaseLifecycleSuggestionCard caseId={caseItem.id} suggestion={lifecycleSuggestion} />
-        )}
+      {executionPlacement === "primary" && !showResolvedNextStep && (
+        <section className={`mt-6 ${workspaceNextStepSurfaceClass}`}>
+          <p className={workspaceType.kicker}>Следующий шаг</p>
+          <div className="mt-3">{executionPanel}</div>
+        </section>
+      )}
+      {executionPlacement === "quiet" && <div className="mt-6">{executionPanel}</div>}
 
-        {(caseItem.priorityUrgency || caseItem.priorityStake || caseItem.priorityNote) && (
-          <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3 shadow-sm">
-            <h2 className="text-xs font-medium uppercase tracking-wide text-zinc-500">Приоритет</h2>
-            <div className="mt-1.5">
-              <PriorityBadge
-                urgency={caseItem.priorityUrgency}
-                stake={caseItem.priorityStake}
-                note={caseItem.priorityNote}
-              />
-            </div>
-          </div>
-        )}
+      <CaseDialogueLauncher
+        caseId={caseItem.id}
+        messages={messages}
+        secondary={Boolean(reopenSuggestion || lifecycleSuggestion || executionSuggestion)}
+      />
 
-        {caseItem.decisionTree && (
-          <CollapsibleCaseBlock title="Дерево решений / рассуждение">
-            <p className="whitespace-pre-wrap font-mono text-sm leading-snug text-zinc-700">
-              {caseItem.decisionTree}
-            </p>
-          </CollapsibleCaseBlock>
-        )}
-
-        {caseItem.recordedResult && !storedAnalysis && (
-          <CollapsibleCaseBlock title="Итог">
-            <p className="whitespace-pre-wrap text-sm leading-snug text-zinc-700">
-              {caseItem.recordedResult}
-            </p>
-          </CollapsibleCaseBlock>
-        )}
-
-        {storedAnalysis && (
-          <div>
-            <h2 className="text-xs font-medium uppercase tracking-wide text-zinc-500">Разбор ИИ</h2>
-            <p className="mt-1 text-xs text-zinc-400">
-              {decisionStatusLabel(storedAnalysis.decisionStatus)}
-            </p>
-            <div className="mt-3">
-              <AnalysisSections sections={storedAnalysis.sections} />
-            </div>
-          </div>
-        )}
+      <section className="mt-14 border-t border-zinc-200 pt-8">
+        <h2 className={workspaceType.section}>Дополнительно</h2>
+        <div className="mt-4">
+          <WorkspaceDetails title="Статус кейса">
+            <CaseLifecyclePanel
+              caseId={caseItem.id}
+              lifecycleState={caseItem.lifecycleState}
+              blockerType={caseItem.blockerType}
+              blockerNote={caseItem.blockerNote}
+              lifecycleUpdatedAt={caseItem.lifecycleUpdatedAt.toISOString()}
+              renderedAt={renderedAt}
+              bare
+            />
+          </WorkspaceDetails>
+          <WorkspaceDetails title="Действия">
+            <CaseDetailControls
+              embedded
+              caseItem={{
+                id: caseItem.id,
+                title: caseItem.title,
+                domain: caseItem.domain,
+                status: caseItem.status,
+              }}
+            />
+          </WorkspaceDetails>
+          {previousCycles.length > 0 && (
+            <WorkspaceDetails title="История решений" hint={previousCyclesLabel(previousCycles.length)}>
+              <ol className="space-y-4">
+                {previousCycles.map((cycle, index) => {
+                  const preview = previousCyclePreview(cycle);
+                  const closed = formatWorkspaceDate(preview.closedAt);
+                  return (
+                    <li key={`${cycle.archivedAt}-${index}`} className={workspaceType.body}>
+                      {preview.resolution && <p>{preview.resolution}</p>}
+                      {preview.execution && (
+                        <p className={`mt-1 ${workspaceType.muted}`}>{preview.execution}</p>
+                      )}
+                      {closed && <p className={`mt-1 ${workspaceType.muted}`}>Закрыт {closed}</p>}
+                    </li>
+                  );
+                })}
+              </ol>
+            </WorkspaceDetails>
+          )}
+          {executionPlacement === "history" && executionPanel && (
+            <WorkspaceDetails title="Исполнение">
+              {executionPanel}
+            </WorkspaceDetails>
+          )}
+          {caseItem.decisionTree && (
+            <WorkspaceDetails title="Рассуждение">
+              <p className={`whitespace-pre-wrap ${workspaceType.body}`}>
+                {caseItem.decisionTree}
+              </p>
+            </WorkspaceDetails>
+          )}
+          {caseItem.recordedResult && storedAnalysis && (
+            <WorkspaceDetails title="Итог">
+              <p className={`whitespace-pre-wrap ${workspaceType.body}`}>
+                {caseItem.recordedResult}
+              </p>
+            </WorkspaceDetails>
+          )}
+        </div>
       </section>
-
-      <CaseDialogueLauncher caseId={caseItem.id} messages={messages} />
     </main>
   );
 }

@@ -2,13 +2,24 @@
 
 import { useEffect, useState } from "react";
 import { CaseDialogue, type CaseMessageItem } from "@/app/cases/[id]/CaseDialogue";
+import {
+  workspaceDialogueLauncherClass,
+  workspaceDialogueLauncherIconClass,
+  workspaceDialogueLauncherSecondaryClass,
+  workspaceType,
+} from "@/app/cases/[id]/workspace-ui";
 
 type CaseDialogueLauncherProps = {
   caseId: string;
   messages: CaseMessageItem[];
+  secondary?: boolean;
 };
 
-export function CaseDialogueLauncher({ caseId, messages }: CaseDialogueLauncherProps) {
+export function CaseDialogueLauncher({
+  caseId,
+  messages,
+  secondary = false,
+}: CaseDialogueLauncherProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
@@ -26,19 +37,25 @@ export function CaseDialogueLauncher({ caseId, messages }: CaseDialogueLauncherP
 
   return (
     <>
-      <div className="mt-8 border-t border-zinc-200 pt-6">
-        <button
-          type="button"
-          onClick={() => setIsOpen(true)}
-          className="inline-flex items-center gap-2 rounded-xl bg-zinc-900 px-5 py-3 text-sm font-medium text-white hover:bg-zinc-700"
-        >
-          <span aria-hidden>💬</span>
-          Обсудить с ИИ
-          {messages.length > 0 && (
-            <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs">{messages.length}</span>
-          )}
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={() => setIsOpen(true)}
+        className={`mt-5 w-full px-4 py-3.5 text-left ${
+          secondary ? workspaceDialogueLauncherSecondaryClass : workspaceDialogueLauncherClass
+        }`}
+      >
+        <span className="flex items-start gap-3">
+          <span className={workspaceDialogueLauncherIconClass} aria-hidden>
+            +
+          </span>
+          <span className="min-w-0">
+            <span className={secondary ? `${workspaceType.section} text-zinc-700` : workspaceType.section}>
+              Добавить новое обстоятельство
+            </span>
+            <span className={`mt-0.5 block ${workspaceType.muted}`}>Сообщить, что изменилось в ситуации</span>
+          </span>
+        </span>
+      </button>
 
       {isOpen && (
         <div
@@ -51,7 +68,7 @@ export function CaseDialogueLauncher({ caseId, messages }: CaseDialogueLauncherP
         >
           <div className="flex h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:h-[85vh] sm:rounded-2xl">
             <div className="flex shrink-0 items-center justify-between border-b border-zinc-200 px-4 py-3">
-              <h2 className="text-sm font-semibold text-zinc-900">Переписка</h2>
+              <h2 className={workspaceType.section}>Добавить новое обстоятельство</h2>
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}

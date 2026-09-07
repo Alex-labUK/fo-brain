@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { applyCaseExecution } from "@/app/cases/[id]/actions";
+import { workspaceGuidanceSurfaceClass, workspaceType } from "@/app/cases/[id]/workspace-ui";
 import type { ExecutionSuggestion } from "@/lib/case-execution";
 
 type CaseExecutionSuggestionCardProps = {
@@ -38,13 +39,9 @@ export function CaseExecutionSuggestionCard({
   }
 
   return (
-    <section className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3">
-      <h2 className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-        FO Brain рекомендует
-      </h2>
-      <p className="mt-1.5 text-xs font-medium uppercase tracking-wide text-zinc-400">
-        Следующий шаг
-      </p>
+    <section className={workspaceGuidanceSurfaceClass}>
+      <p className={workspaceType.kicker}>FO Brain</p>
+      <p className={`mt-2 ${workspaceType.section}`}>Рекомендует → шаг исполнения</p>
       {editing ? (
         <div className="mt-1 space-y-2">
           <textarea
@@ -68,14 +65,13 @@ export function CaseExecutionSuggestionCard({
         </div>
       ) : (
         <>
-          <p className="mt-0.5 text-sm font-medium text-zinc-900">{suggestion.step}</p>
-          <p className="mt-2 text-xs font-medium uppercase tracking-wide text-zinc-400">
-            Ответственный
-          </p>
-          <p className="mt-0.5 text-sm text-zinc-800">{suggestion.owner || "—"}</p>
+          <p className={`mt-1.5 ${workspaceType.body}`}>{suggestion.step}</p>
+          {suggestion.owner ? (
+            <p className={`mt-1 ${workspaceType.muted}`}>{suggestion.owner}</p>
+          ) : null}
         </>
       )}
-      <p className="mt-1 text-xs text-zinc-500">{suggestion.reason}</p>
+      <p className={`mt-1.5 ${workspaceType.muted}`}>{suggestion.reason}</p>
       <div className="mt-3 flex flex-wrap gap-2">
         {editing ? (
           <>

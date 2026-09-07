@@ -10,6 +10,7 @@ import {
 } from "@/app/cases/[id]/actions";
 import { formatLifecycleSince } from "@/lib/case-lifecycle";
 import { executionStatusLabels, type ExecutionStatus } from "@/lib/case-execution";
+import { workspaceType } from "@/app/cases/[id]/workspace-ui";
 
 type CaseExecutionPanelProps = {
   caseId: string;
@@ -20,6 +21,8 @@ type CaseExecutionPanelProps = {
   renderedAt: string;
   needsReview: boolean;
   showClosePrompt: boolean;
+  tone?: "default" | "quiet";
+  hideTitle?: boolean;
 };
 
 export function CaseExecutionPanel({
@@ -31,6 +34,8 @@ export function CaseExecutionPanel({
   renderedAt,
   needsReview,
   showClosePrompt,
+  tone = "default",
+  hideTitle = false,
 }: CaseExecutionPanelProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -60,19 +65,21 @@ export function CaseExecutionPanel({
   }
 
   const statusLabel = executionStatusLabels[executionStatus];
+  const quiet = tone === "quiet";
 
   return (
-    <section className="rounded-xl border border-zinc-200 bg-white px-4 py-3 shadow-sm">
-      <h2 className="text-xs font-medium uppercase tracking-wide text-zinc-500">Исполнение</h2>
+    <section className={quiet ? "border-t border-zinc-100 pt-4" : undefined}>
+      {!hideTitle && (
+        <h2 className={`${workspaceType.section} ${quiet ? "text-zinc-500" : ""}`}>
+          Исполнение
+        </h2>
+      )}
       {needsReview && (
-        <p className="mt-1.5 text-sm text-amber-800">
+        <p className={`mt-1.5 ${workspaceType.muted} text-amber-800`}>
           Решение изменилось. Текущий шаг требует пересмотра.
         </p>
       )}
 
-      <p className="mt-1.5 text-xs font-medium uppercase tracking-wide text-zinc-400">
-        Следующий шаг
-      </p>
       {editing ? (
         <div className="mt-1 space-y-2">
           <textarea
@@ -96,20 +103,20 @@ export function CaseExecutionPanel({
         </div>
       ) : (
         <>
-          <p className="mt-0.5 text-sm font-medium text-zinc-900">{executionStep}</p>
-          <p className="mt-2 text-xs font-medium uppercase tracking-wide text-zinc-400">
-            Ответственный
+          <p className={`mt-2 ${quiet ? workspaceType.muted : workspaceType.primary}`}>
+            {executionStep}
           </p>
-          <p className="mt-0.5 text-sm text-zinc-800">{executionOwner || "—"}</p>
+          {executionOwner ? <p className={`mt-1 ${workspaceType.muted}`}>{executionOwner}</p> : null}
+          {quiet ? (
+            <p className={`mt-1 ${workspaceType.muted}`}>
+              {needsReview ? "Требует пересмотра" : statusLabel}
+            </p>
+          ) : null}
         </>
       )}
 
-      <p className="mt-2 text-xs font-medium uppercase tracking-wide text-zinc-400">Статус</p>
-      <p className="mt-0.5 text-sm text-zinc-800">
-        {needsReview ? "Требует пересмотра" : statusLabel}
-      </p>
       {executionUpdatedAt && (
-        <p className="mt-1 text-xs text-zinc-400">
+        <p className={`mt-1 ${workspaceType.muted}`}>
           {formatLifecycleSince(executionUpdatedAt, renderedAt)}
         </p>
       )}

@@ -14,8 +14,6 @@ export type {
 } from "@/core/orchestration/analysis-core";
 
 export {
-  ANALYSIS_INPUT_STORAGE_KEY,
-  ANALYSIS_RESULT_STORAGE_KEY,
   FORBIDDEN_PHRASES,
   FORK_FACT_ACTIONS_RULES,
   PAST_FACT_ROUTE_RULES,

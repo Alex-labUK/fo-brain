@@ -533,9 +533,6 @@ export function countAnalysisActions(result: AnalysisResult): number {
   return actionsSection?.actions?.length ?? 0;
 }
 
-export const ANALYSIS_INPUT_STORAGE_KEY = "fo-brain-analysis-input";
-export const ANALYSIS_RESULT_STORAGE_KEY = "fo-brain-analysis-result";
-
 /** @deprecated Use countAnalysisActions */
 export function countAnalysisCriticalFacts(result: AnalysisResult): number {
   return countAnalysisActions(result);

@@ -10,6 +10,7 @@ import { generateLifecycleSuggestion } from "@/core/orchestration/lifecycle-sugg
 import { generateCaseId } from "@/lib/case-id";
 import { toStoredLifecycleSuggestion } from "@/lib/case-lifecycle";
 import { prisma } from "@/lib/prisma";
+import { deriveSituationTitle, INTAKE_CASE_DOMAIN, isMeaningfulSituation } from "@/lib/situation-title";
 
 export async function runCaseAnalysis(input: AnalysisInput): Promise<AnalysisRunResult> {
   return generateAnalysis(input);
@@ -106,4 +107,22 @@ export async function saveAnalysisAsCase(input: SaveAnalysisAsCaseInput): Promis
   revalidatePath(`/cases/${id}`);
 
   return { id };
+}
+
+/** Intake: one existing analysis pass, then the existing save-as-case path. */
+export async function startNewSituation(whatHappened: string): Promise<{ id: string }> {
+  if (!isMeaningfulSituation(whatHappened)) {
+    throw new Error("Опишите, что произошло");
+  }
+
+  const situation = whatHappened.trim();
+  const run = await runCaseAnalysis({ whatHappened: situation });
+
+  return saveAnalysisAsCase({
+    title: deriveSituationTitle(situation, run.result),
+    domain: INTAKE_CASE_DOMAIN,
+    status: "real_in_progress",
+    input: { whatHappened: situation },
+    analysisResult: run.result,
+  });
 }

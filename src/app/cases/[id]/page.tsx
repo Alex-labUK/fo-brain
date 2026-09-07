@@ -21,7 +21,6 @@ import {
 } from "@/lib/case-execution";
 import { parseDecisionCycleHistory, visibleReopenSuggestion } from "@/lib/decision-cycle";
 import { ensureSeeded } from "@/lib/ensure-seeded";
-import { formatDomain } from "@/lib/labels";
 import {
   computePriorityColor,
   parseStake,
@@ -105,24 +104,19 @@ export default async function CaseDetailPage({ params }: PageProps) {
   return (
     <main className="mx-auto w-full max-w-3xl px-6 py-6">
       <Link href="/cases" className="text-sm text-zinc-500 hover:text-zinc-700">
-        ← К библиотеке кейсов
+        ← К решениям
       </Link>
 
       <div className="mt-4 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">{caseItem.title}</h1>
-          <p className="mt-1 text-sm text-zinc-500">
-            {caseItem.id} · {formatDomain(caseItem.domain)}
-            {caseItem.outcome && (
-              <>
-                {" "}
-                ·{" "}
-                <Link href={`/outcomes/${caseItem.outcome.id}`} className="underline">
-                  outcome
-                </Link>
-              </>
-            )}
-          </p>
+          {caseItem.outcome && (
+            <p className="mt-1 text-sm text-zinc-500">
+              <Link href={`/outcomes/${caseItem.outcome.id}`} className="underline">
+                outcome
+              </Link>
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span

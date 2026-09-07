@@ -20,7 +20,8 @@
     "test:execution": "tsx src/lib/case-execution.test.ts && tsx src/lib/case-lifecycle.test.ts",
     "test:reopen": "tsx src/lib/decision-cycle.test.ts",
     "test:dashboard": "tsx src/lib/case-dashboard.test.ts",
-    "test": "npm run test:analysis && npm run test:proposals && npm run test:execution && npm run test:reopen && npm run test:dashboard",
+    "test:intake": "tsx src/app/analyze/situation-intake.test.ts",
+    "test": "npm run test:analysis && npm run test:proposals && npm run test:execution && npm run test:reopen && npm run test:dashboard && npm run test:intake",
     "postinstall": "prisma generate"
   },
   "prisma": {

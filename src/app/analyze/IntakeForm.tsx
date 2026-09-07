@@ -2,55 +2,61 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ANALYSIS_INPUT_STORAGE_KEY, ANALYSIS_RESULT_STORAGE_KEY, type AnalysisInput } from "@/core/orchestration/analysis-stub";
+import { startNewSituation } from "@/app/analyze/actions";
+import { isMeaningfulSituation } from "@/lib/situation-title";
+
+const PLACEHOLDER =
+  "Например: Принципал рассматривает покупку дома. Технический отчёт выявил проблему с пристройкой, продавец обещает её устранить, но пока неизвестно, снимет ли это юридический риск.";
 
 export function IntakeForm() {
   const router = useRouter();
   const [whatHappened, setWhatHappened] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  function handleSubmit(event: React.FormEvent) {
+  async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
+    if (submitting) return;
 
-    if (!whatHappened.trim()) {
+    if (!isMeaningfulSituation(whatHappened)) {
       setError("Опишите, что произошло");
       return;
     }
 
-    const input: AnalysisInput = {
-      whatHappened: whatHappened.trim(),
-    };
+    setError(null);
+    setSubmitting(true);
 
-    sessionStorage.setItem(ANALYSIS_INPUT_STORAGE_KEY, JSON.stringify(input));
-    sessionStorage.removeItem(ANALYSIS_RESULT_STORAGE_KEY);
-    router.push("/analyze/result");
+    try {
+      const { id } = await startNewSituation(whatHappened);
+      router.push(`/cases/${id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Не удалось разобрать ситуацию");
+      setSubmitting(false);
+    }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <label className="block space-y-2">
-        <span className="text-sm font-medium text-zinc-700">Что произошло?</span>
-        <textarea
-          value={whatHappened}
-          onChange={(e) => {
-            setWhatHappened(e.target.value);
-            setError(null);
-          }}
-          rows={10}
-          placeholder="Опишите ситуацию своими словами..."
-          className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm leading-relaxed"
-        />
-      </label>
+    <form onSubmit={handleSubmit} className="mt-8">
+      <textarea
+        value={whatHappened}
+        onChange={(event) => {
+          setWhatHappened(event.target.value);
+          if (error) setError(null);
+        }}
+        disabled={submitting}
+        rows={12}
+        placeholder={PLACEHOLDER}
+        className="w-full resize-y rounded-xl border border-zinc-200 bg-white px-4 py-3 text-base leading-relaxed text-zinc-900 placeholder:text-zinc-400 outline-none focus:border-zinc-400 disabled:opacity-60"
+      />
 
-      {error && (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
-      )}
+      {error && <p className="mt-3 text-sm text-red-700">{error}</p>}
 
       <button
         type="submit"
-        className="rounded-lg bg-zinc-900 px-6 py-2.5 text-sm font-medium text-white hover:bg-zinc-700"
+        disabled={submitting}
+        className="mt-6 rounded-lg bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-60"
       >
-        Анализировать
+        {submitting ? "Разбираю ситуацию…" : "Разобрать ситуацию"}
       </button>
     </form>
   );

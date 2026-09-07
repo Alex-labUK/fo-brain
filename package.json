@@ -3,8 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "npm run dev:stop && next dev",
     "dev:stop": "tsx scripts/stop-dev.ts",
+    "dev:clean": "npm run dev:stop && tsx scripts/clean-next-cache.ts",
+    "dev:fresh": "npm run dev:clean && next dev",
     "dev:restart": "npm run dev:stop && npm run dev",
     "predev": "prisma generate && prisma migrate deploy",
     "build": "prisma generate && next build",
@@ -22,7 +24,8 @@
     "test:dashboard": "tsx src/lib/case-dashboard.test.ts",
     "test:intake": "tsx src/app/analyze/situation-intake.test.ts",
     "test:workspace": "tsx src/lib/case-workspace.test.ts",
-    "test": "npm run test:analysis && npm run test:proposals && npm run test:execution && npm run test:reopen && npm run test:dashboard && npm run test:intake && npm run test:workspace",
+    "test:change-summary": "tsx src/lib/decision-change-summary.test.ts",
+    "test": "npm run test:analysis && npm run test:proposals && npm run test:execution && npm run test:reopen && npm run test:dashboard && npm run test:intake && npm run test:workspace && npm run test:change-summary",
     "postinstall": "prisma generate"
   },
   "prisma": {

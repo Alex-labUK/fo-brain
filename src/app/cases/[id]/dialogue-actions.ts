@@ -15,6 +15,11 @@ import {
   nextStoredReopenSuggestion,
   shouldArchiveResolvedCycle,
 } from "@/lib/decision-cycle";
+import {
+  buildDecisionChangeSummary,
+  deriveDecisionChangeTransitionKey,
+  type DecisionChangeSummaryPayload,
+} from "@/lib/decision-change-summary";
 import { prisma } from "@/lib/prisma";
 
 const AI_UNAVAILABLE_REPLY =
@@ -30,7 +35,10 @@ function buildRecordedResultFromAnalysis(sections: { title: string; content?: st
   return [outcome, fork].filter(Boolean).join(" ");
 }
 
-export async function postCaseMessage(caseId: string, text: string): Promise<void> {
+export async function postCaseMessage(
+  caseId: string,
+  text: string,
+): Promise<DecisionChangeSummaryPayload | null> {
   const trimmed = text.trim();
   if (!trimmed) {
     throw new Error("Сообщение не может быть пустым");
@@ -54,6 +62,9 @@ export async function postCaseMessage(caseId: string, text: string): Promise<voi
       executionUpdatedAt: true,
       decisionCycleHistory: true,
       reopenSuggestion: true,
+      priorityUrgency: true,
+      priorityStake: true,
+      priorityNote: true,
     },
   });
 
@@ -100,6 +111,7 @@ export async function postCaseMessage(caseId: string, text: string): Promise<voi
   });
 
   if (run.source === "ai") {
+    const assistantMessageId = generateMessageId();
     const assistantContent =
       run.result.reply?.trim() ||
       run.result.sections.find((section) => section.title === SECTION_TITLES[0])?.content?.trim() ||
@@ -148,6 +160,24 @@ export async function postCaseMessage(caseId: string, text: string): Promise<voi
       previousStored: caseItem.reopenSuggestion,
     });
 
+    const changeSummary = buildDecisionChangeSummary({
+      transitionKey:
+        deriveDecisionChangeTransitionKey(caseItem.analysisResult, run.result) ?? assistantMessageId,
+      beforeAnalysis: caseItem.analysisResult,
+      afterAnalysis: run.result,
+      beforePriority: {
+        urgency: caseItem.priorityUrgency,
+        stake: caseItem.priorityStake,
+      },
+      afterPriority: run.result.priority,
+      execution: {
+        executionStep: caseItem.executionStep,
+        executionOwner: caseItem.executionOwner,
+        executionStatus: isExecutionStatus(caseItem.executionStatus) ? caseItem.executionStatus : null,
+      },
+      lifecycleState: caseItem.lifecycleState,
+    });
+
     const caseUpdate: {
       analysisResult: typeof run.result;
       recordedResult: string;
@@ -185,13 +215,27 @@ export async function postCaseMessage(caseId: string, text: string): Promise<voi
       }),
       prisma.caseMessage.create({
         data: {
-          id: generateMessageId(),
+          id: assistantMessageId,
           caseId,
           role: "assistant",
           content: assistantContent,
         },
       }),
     ]);
+
+    revalidatePath("/");
+    revalidatePath("/cases");
+    revalidatePath(`/cases/${caseId}`);
+
+    if (!changeSummary) {
+      return null;
+    }
+
+    return {
+      transitionKey:
+        deriveDecisionChangeTransitionKey(caseItem.analysisResult, run.result) ?? assistantMessageId,
+      summary: changeSummary,
+    };
   } else {
     await prisma.caseMessage.create({
       data: {
@@ -206,4 +250,5 @@ export async function postCaseMessage(caseId: string, text: string): Promise<voi
   revalidatePath("/");
   revalidatePath("/cases");
   revalidatePath(`/cases/${caseId}`);
+  return null;
 }

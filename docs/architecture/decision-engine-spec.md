@@ -483,3 +483,21 @@ v1.2:
 - Lifecycle suggestion may read `decisionStatus` as guidance only. AI still must not write lifecycle fields.
 - Compact UI may show «Решение определено» / «Решение ещё не определено». No new analysis card.
 - `decision-engine.md` and `seed-data.json` are untouched by this change.
+
+---
+
+## Decision Change Summary (v1)
+
+After a user adds a new circumstance on an **existing** case (`postCaseMessage` → `continueAnalysis`), FO Brain may show a temporary **Decision Change Summary** above the Decision Workspace.
+
+**Purpose:** explain what changed in the Decision Engine output after the update — without manual before/after comparison.
+
+**Source:** deterministic comparison of the previous active `analysisResult` (before persist) and the newly generated analysis (after AI success). No additional model call.
+
+**Compared fields (normalized):** `decisionStatus`, Outcome, Main Decision Fork, Determining Fact, derived Next Step (same helpers as the workspace), and user-facing priority labels.
+
+**Display:** compact zinc surface, dismissible with «Понятно». Survives `router.refresh()` via `sessionStorage` keyed by case id and assistant-message transition id. Dismissal is remembered for that transition only; ordinary reloads do not re-show it.
+
+**Not shown:** initial case creation, ordinary page load, fallback AI failures, or historical analyses without a fresh update event.
+
+**Relationship to cycles/reopen:** resolved→unresolved transitions surface «Появилась новая неопределённость» in the summary only; lifecycle reopen and `decisionCycleHistory` archiving remain human-controlled and unchanged.

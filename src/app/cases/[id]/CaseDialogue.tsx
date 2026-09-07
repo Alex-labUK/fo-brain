@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { postCaseMessage } from "@/app/cases/[id]/dialogue-actions";
+import { storeDecisionChangeSummary } from "@/lib/decision-change-summary";
 
 export type CaseMessageItem = {
   id: string;
@@ -15,13 +16,15 @@ type CaseDialogueProps = {
   caseId: string;
   messages: CaseMessageItem[];
   className?: string;
+  onSuccess?: () => void;
 };
 
-export function CaseDialogue({ caseId, messages, className }: CaseDialogueProps) {
+export function CaseDialogue({ caseId, messages, className, onSuccess }: CaseDialogueProps) {
   const router = useRouter();
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const submitLockRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -33,16 +36,23 @@ export function CaseDialogue({ caseId, messages, className }: CaseDialogueProps)
   function handleSubmit(event?: React.FormEvent) {
     event?.preventDefault();
     const trimmed = text.trim();
-    if (!trimmed || isPending) return;
+    if (!trimmed || isPending || submitLockRef.current) return;
 
     setError(null);
+    submitLockRef.current = true;
     startTransition(async () => {
       try {
-        await postCaseMessage(caseId, trimmed);
+        const changePayload = await postCaseMessage(caseId, trimmed);
+        if (changePayload) {
+          storeDecisionChangeSummary(caseId, changePayload);
+        }
         setText("");
+        onSuccess?.();
         router.refresh();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Не удалось отправить сообщение");
+      } finally {
+        submitLockRef.current = false;
       }
     });
   }

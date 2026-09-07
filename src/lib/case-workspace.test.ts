@@ -282,6 +282,8 @@ assert(page.includes("workspaceType.fact"), "determining fact is lighter than De
 assert(page.includes("workspaceFactInsetClass"), "determining fact is a distinct inset");
 assert(page.includes("workspaceNextStepOwnerLine"), "A: next-step metadata shows owner/source only");
 assert(!page.includes('join(" · ")'), "A: lifecycle status is not duplicated in Next Step metadata");
+assert(!page.includes("operationalStatus].filter"), "C: Next Step does not join operational status");
+assert(!page.includes("nextStep.owner, operationalStatus"), "C: Next Step metadata is owner-only");
 assert(!page.includes("Ответственный / источник:"), "A: owner is not a document source line");
 assert(page.includes("showReason={showLifecycleReason}"), "F: repetitive recommendation copy can be hidden");
 assert(workspaceUi.includes("px-4 py-4"), "Decision block padding is tighter");
@@ -324,7 +326,7 @@ assert(page.includes('title="История решений"'), "H: previous-cycl
 assert(page.includes("previousCyclesLabel"), "H: history uses a readable count");
 assert(page.includes("CaseDialogueLauncher"), "K: continue-analysis remains accessible");
 assert(page.includes("secondary={Boolean(reopenSuggestion || lifecycleSuggestion || executionSuggestion)}"), "K: continue-analysis recedes when approval is required");
-assert(dialogue.includes("Добавить новое обстоятельство"), "K: launcher is Добавить новое обстоятельство");
+assert(dialogue.includes("onSuccess={() => setIsOpen(false)}"), "C: dialogue closes after submit so summary is visible");
 assert(dialogue.includes("Сообщить, что изменилось в ситуации"), "K: launcher has supporting copy");
 assert(!dialogue.includes("Продолжить разбор"), "K: previous continue-analysis phrasing is gone");
 assert(!dialogue.includes("Обсудить с ИИ"), "K: chatbot phrasing is gone");

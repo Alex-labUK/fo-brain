@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CaseDetailControls } from "@/app/cases/[id]/CaseDetailControls";
 import { CaseDialogueLauncher } from "@/app/cases/[id]/CaseDialogueLauncher";
+import { DecisionChangeSummaryBanner } from "@/app/cases/[id]/DecisionChangeSummaryBanner";
 import { CaseExecutionPanel } from "@/app/cases/[id]/CaseExecutionPanel";
 import { CaseExecutionSuggestionCard } from "@/app/cases/[id]/CaseExecutionSuggestionCard";
 import { CaseLifecyclePanel } from "@/app/cases/[id]/CaseLifecyclePanel";
@@ -194,6 +195,11 @@ export default async function CaseDetailPage({ params }: PageProps) {
           <CaseReopenSuggestionCard caseId={caseItem.id} suggestion={reopenSuggestion} />
         </div>
       )}
+
+      <DecisionChangeSummaryBanner
+        caseId={caseItem.id}
+        dialogueRevision={messages.at(-1)?.id ?? null}
+      />
 
       {showDecisionBlock && (
         <section className={`mt-6 ${workspaceDecisionSurfaceClass(decisionSurfaceResolved)}`}>

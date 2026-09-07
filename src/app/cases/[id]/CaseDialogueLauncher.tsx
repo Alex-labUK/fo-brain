@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { CaseDialogue, type CaseMessageItem } from "@/app/cases/[id]/CaseDialogue";
+import type { CaseDialogueMode } from "@/app/cases/[id]/case-dialogue-mode";
 import {
   workspaceDialogueLauncherClass,
   workspaceDialogueLauncherIconClass,
@@ -9,18 +10,61 @@ import {
   workspaceType,
 } from "@/app/cases/[id]/workspace-ui";
 
+type CaseDialogueContextValue = {
+  openNextStepResult: (currentStepText: string) => void;
+};
+
+const CaseDialogueContext = createContext<CaseDialogueContextValue | null>(null);
+
+export function useCaseDialogue(): CaseDialogueContextValue {
+  const context = useContext(CaseDialogueContext);
+  if (!context) {
+    throw new Error("useCaseDialogue must be used within CaseDialogueLauncher");
+  }
+  return context;
+}
+
 type CaseDialogueLauncherProps = {
   caseId: string;
   messages: CaseMessageItem[];
   secondary?: boolean;
+  children?: ReactNode;
+};
+
+const MODE_COPY: Record<
+  CaseDialogueMode,
+  { title: string; helper?: string }
+> = {
+  circumstance: {
+    title: "Добавить новое обстоятельство",
+  },
+  next_step_result: {
+    title: "Результат следующего шага",
+    helper: "Сообщите, что удалось выяснить или что произошло после выполнения шага.",
+  },
 };
 
 export function CaseDialogueLauncher({
   caseId,
   messages,
   secondary = false,
+  children,
 }: CaseDialogueLauncherProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [mode, setMode] = useState<CaseDialogueMode>("circumstance");
+  const [currentStepText, setCurrentStepText] = useState<string | null>(null);
+
+  const openCircumstance = useCallback(() => {
+    setMode("circumstance");
+    setCurrentStepText(null);
+    setIsOpen(true);
+  }, []);
+
+  const openNextStepResult = useCallback((stepText: string) => {
+    setMode("next_step_result");
+    setCurrentStepText(stepText.trim() || null);
+    setIsOpen(true);
+  }, []);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -35,11 +79,15 @@ export function CaseDialogueLauncher({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen]);
 
+  const copy = MODE_COPY[mode];
+
   return (
-    <>
+    <CaseDialogueContext.Provider value={{ openNextStepResult }}>
+      {children}
+
       <button
         type="button"
-        onClick={() => setIsOpen(true)}
+        onClick={openCircumstance}
         className={`mt-5 w-full px-4 py-3.5 text-left ${
           secondary ? workspaceDialogueLauncherSecondaryClass : workspaceDialogueLauncherClass
         }`}
@@ -68,7 +116,7 @@ export function CaseDialogueLauncher({
         >
           <div className="flex h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:h-[85vh] sm:rounded-2xl">
             <div className="flex shrink-0 items-center justify-between border-b border-zinc-200 px-4 py-3">
-              <h2 className={workspaceType.section}>Добавить новое обстоятельство</h2>
+              <h2 className={workspaceType.section}>{copy.title}</h2>
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
@@ -81,12 +129,14 @@ export function CaseDialogueLauncher({
             <CaseDialogue
               caseId={caseId}
               messages={messages}
+              mode={mode}
+              currentStepText={currentStepText}
               className="min-h-0 flex-1 px-4 pb-4"
               onSuccess={() => setIsOpen(false)}
             />
           </div>
         </div>
       )}
-    </>
+    </CaseDialogueContext.Provider>
   );
 }

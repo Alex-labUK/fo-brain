@@ -501,3 +501,19 @@ After a user adds a new circumstance on an **existing** case (`postCaseMessage` 
 **Not shown:** initial case creation, ordinary page load, fallback AI failures, or historical analyses without a fresh update event.
 
 **Relationship to cycles/reopen:** resolved→unresolved transitions surface «Появилась новая неопределённость» in the summary only; lifecycle reopen and `decisionCycleHistory` archiving remain human-controlled and unchanged.
+
+---
+
+## Next Step Result Flow (v1)
+
+When the workspace shows an **active** Next Step, a secondary action **«Добавить результат»** opens the existing case dialogue in a focused **result-of-current-step** mode.
+
+**Purpose:** give users a contextual shortcut to report what happened after attempting the visible step — without turning Next Step into a task manager.
+
+**Path:** same as «Добавить новое обстоятельство» — `postCaseMessage` → `continueAnalysis` → optional Decision Change Summary. No second analysis path and no additional AI call.
+
+**Message framing:** the client prefixes user text as `Результат текущего шага: …` before `postCaseMessage`. The prefix is dialogue evidence only; the server continues to read authoritative case state from the database.
+
+**Visibility:** shown for unresolved fact-gathering steps and pending execution steps when reporting could matter. Hidden when there is no active step, when only historical/completed execution is shown, or when a closed case has a pending reopen recommendation (reopen first).
+
+**Human control preserved:** submitting a result does **not** mark execution completed, change lifecycle, resolve a determining fact, or close the case. Existing «Выполнено» and lifecycle/reopen mechanics remain unchanged.

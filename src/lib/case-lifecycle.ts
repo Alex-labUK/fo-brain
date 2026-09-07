@@ -1,4 +1,11 @@
 import type { CaseBlockerType, CaseLifecycleState } from "@prisma/client";
+import type { AnalysisResult } from "@/core/orchestration/analysis-core";
+import {
+  RESOLVED_DETERMINING_FACT,
+  SECTION_TITLES,
+  parseDecisionStatus,
+} from "@/core/orchestration/analysis-core";
+import { analysisCycleKey } from "@/lib/decision-cycle";
 
 const WAITING_LIFECYCLE_STATES: readonly CaseLifecycleState[] = [
   "waiting_for_fact",
@@ -76,6 +83,7 @@ export type LifecycleSuggestion = {
 
 export type StoredLifecycleSuggestion = LifecycleSuggestion & {
   dismissed: boolean;
+  analysisKey?: string;
 };
 
 type LifecycleSnapshot = {
@@ -210,17 +218,165 @@ export function parseStoredLifecycleSuggestion(raw: unknown): StoredLifecycleSug
     return null;
   }
 
+  const analysisKey = typeof raw.analysisKey === "string" ? raw.analysisKey.trim() : "";
+
   return {
     ...suggestion,
     dismissed: raw.dismissed === true,
+    ...(analysisKey ? { analysisKey } : {}),
   };
 }
 
-export function toStoredLifecycleSuggestion(suggestion: LifecycleSuggestion): StoredLifecycleSuggestion {
+export function toStoredLifecycleSuggestion(
+  suggestion: LifecycleSuggestion,
+  analysisKey: string,
+): StoredLifecycleSuggestion {
+  const key = analysisKey.trim();
+  if (!key) {
+    throw new Error("analysisKey is required for stored lifecycle suggestions");
+  }
+
   return {
     ...suggestion,
     dismissed: false,
+    analysisKey: key,
   };
+}
+
+function analysisSectionContent(analysis: AnalysisResult, title: string): string {
+  return analysis.sections.find((section) => section.title === title)?.content?.trim() || "";
+}
+
+function analysisSectionActions(analysis: AnalysisResult): string[] {
+  return analysis.sections.find((section) => section.title === SECTION_TITLES[4])?.actions ?? [];
+}
+
+function analysisSectionRoles(analysis: AnalysisResult): string[] {
+  return (
+    analysis.sections
+      .find((section) => section.title === SECTION_TITLES[3])
+      ?.roleAssignments?.map((assignment) => assignment.role.trim())
+      .filter(Boolean) ?? []
+  );
+}
+
+/** Resolved analyses must not keep waiting/under_analysis lifecycle guidance. */
+export function lifecycleSuggestionCompatibleWithAnalysis(
+  suggestion: LifecycleSuggestion,
+  analysis: AnalysisResult,
+): boolean {
+  const status = parseDecisionStatus(analysis);
+  if (status === "resolved") {
+    return (
+      !isWaitingState(suggestion.state) &&
+      suggestion.state !== "under_analysis" &&
+      suggestion.state !== "new"
+    );
+  }
+
+  const fact = analysisSectionContent(analysis, SECTION_TITLES[2]);
+  if (
+    suggestion.state === "waiting_for_fact" &&
+    (!fact || fact === RESOLVED_DETERMINING_FACT)
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Deterministic lifecycle guidance from the current analysis.
+ * Used when AI lifecycle suggestion is unavailable or incompatible. No extra AI call.
+ */
+export function deriveLifecycleSuggestion(input: { analysis: AnalysisResult }): LifecycleSuggestion | null {
+  const status = parseDecisionStatus(input.analysis);
+  const actions = analysisSectionActions(input.analysis);
+  const fork = analysisSectionContent(input.analysis, SECTION_TITLES[1]);
+  const fact = analysisSectionContent(input.analysis, SECTION_TITLES[2]);
+
+  if (status === "resolved") {
+    const step = actions[0]?.trim();
+    if (step) {
+      return {
+        state: "executing",
+        blockerNote: step,
+        reason: "Решение определено. Следующий шаг — выполнение согласованных действий.",
+      };
+    }
+
+    if (fork) {
+      return {
+        state: "monitoring",
+        reason: "Решение определено. Достаточно наблюдения за исполнением и последствиями.",
+      };
+    }
+
+    return {
+      state: "closed",
+      reason: "Решение определено, материальных шагов не осталось.",
+    };
+  }
+
+  const roles = analysisSectionRoles(input.analysis);
+  if (roles.some((role) => /принципал|principal/i.test(role))) {
+    return {
+      state: "waiting_for_principal",
+      blockerNote: "Нужно решение принципала.",
+      reason: "Для выбора маршрута нужно решение принципала.",
+    };
+  }
+
+  if (fact && fact !== RESOLVED_DETERMINING_FACT) {
+    return {
+      state: "waiting_for_fact",
+      blockerNote: fact.length > 120 ? `${fact.slice(0, 117)}…` : fact,
+      reason: "Следующий маршрут зависит от получения или подтверждения информации.",
+    };
+  }
+
+  return {
+    state: "under_analysis",
+    reason: "Кейс ещё в разборе, операционное состояние не сводится к ожиданию.",
+  };
+}
+
+/**
+ * Next stored lifecycle recommendation after an analysis write.
+ * Returns null when the case is closed or no suggestion applies.
+ */
+export function nextStoredLifecycleSuggestion(input: {
+  lifecycleState: CaseLifecycleState;
+  nextAnalysis: AnalysisResult;
+  previousStored: unknown;
+  aiSuggestion: LifecycleSuggestion | null;
+}): StoredLifecycleSuggestion | null {
+  if (input.lifecycleState === "closed") {
+    return null;
+  }
+
+  const analysisKey = analysisCycleKey(input.nextAnalysis);
+  const previous = parseStoredLifecycleSuggestion(input.previousStored);
+
+  let suggestion: LifecycleSuggestion | null = null;
+  if (
+    input.aiSuggestion &&
+    lifecycleSuggestionCompatibleWithAnalysis(input.aiSuggestion, input.nextAnalysis)
+  ) {
+    suggestion = input.aiSuggestion;
+  } else {
+    suggestion = deriveLifecycleSuggestion({ analysis: input.nextAnalysis });
+  }
+
+  if (!suggestion) {
+    return null;
+  }
+
+  if (previous && previous.analysisKey === analysisKey && previous.dismissed) {
+    return previous;
+  }
+
+  return toStoredLifecycleSuggestion(suggestion, analysisKey);
 }
 
 /**
@@ -242,13 +398,29 @@ export function storedLifecycleSuggestionAfterClose(raw: unknown): StoredLifecyc
 export function visibleLifecycleSuggestion(
   raw: unknown,
   current: Pick<LifecycleSnapshot, "lifecycleState" | "blockerNote">,
+  analysis?: AnalysisResult | null,
 ): LifecycleSuggestion | null {
   if (current.lifecycleState === "closed") {
     return null;
   }
 
   const stored = parseStoredLifecycleSuggestion(raw);
-  if (!stored || stored.dismissed || !suggestionDiffersFromCurrent(stored, current)) {
+  if (!stored || stored.dismissed) {
+    return null;
+  }
+
+  if (analysis) {
+    if (!stored.analysisKey || stored.analysisKey !== analysisCycleKey(analysis)) {
+      return null;
+    }
+    if (!lifecycleSuggestionCompatibleWithAnalysis(stored, analysis)) {
+      return null;
+    }
+  } else if (stored.analysisKey) {
+    return null;
+  }
+
+  if (!suggestionDiffersFromCurrent(stored, current)) {
     return null;
   }
 

@@ -7,7 +7,7 @@ import type { ConversationTurn } from "@/core/orchestration/analysis-core";
 import { parseDecisionStatus, SECTION_TITLES } from "@/core/orchestration/analysis-core";
 import { continueAnalysis } from "@/core/orchestration/analysis-generate";
 import { generateLifecycleSuggestion } from "@/core/orchestration/lifecycle-suggestion";
-import { toStoredLifecycleSuggestion } from "@/lib/case-lifecycle";
+import { nextStoredLifecycleSuggestion } from "@/lib/case-lifecycle";
 import { isExecutionStatus } from "@/lib/case-execution";
 import {
   appendDecisionCycle,
@@ -124,7 +124,7 @@ export async function postCaseMessage(
       content: message.content,
     }));
 
-    const lifecycleSuggestion =
+    const aiLifecycleSuggestion =
       caseItem.lifecycleState === "closed"
         ? null
         : await generateLifecycleSuggestion({
@@ -136,6 +136,13 @@ export async function postCaseMessage(
             analysis: run.result,
             dialogue,
           });
+
+    const nextLifecycleStored = nextStoredLifecycleSuggestion({
+      lifecycleState: caseItem.lifecycleState,
+      nextAnalysis: run.result,
+      previousStored: caseItem.lifecycleSuggestion,
+      aiSuggestion: aiLifecycleSuggestion,
+    });
 
     const archivedHistory = shouldArchiveResolvedCycle(currentDecisionStatus, nextDecisionStatus)
       ? appendDecisionCycle(
@@ -192,8 +199,8 @@ export async function postCaseMessage(
       analysisResult: run.result,
       recordedResult: buildRecordedResultFromAnalysis(run.result.sections),
       caseMemory: persistedCaseMemory,
-      lifecycleSuggestion: lifecycleSuggestion
-        ? toStoredLifecycleSuggestion(lifecycleSuggestion)
+      lifecycleSuggestion: nextLifecycleStored
+        ? (nextLifecycleStored as Prisma.InputJsonValue)
         : Prisma.DbNull,
       reopenSuggestion: reopenSuggestion ?? Prisma.DbNull,
     };

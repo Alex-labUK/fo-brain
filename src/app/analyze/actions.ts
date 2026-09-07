@@ -8,7 +8,7 @@ import { SECTION_TITLES } from "@/core/orchestration/analysis-core";
 import { generateAnalysis } from "@/core/orchestration/analysis-generate";
 import { generateLifecycleSuggestion } from "@/core/orchestration/lifecycle-suggestion";
 import { generateCaseId } from "@/lib/case-id";
-import { toStoredLifecycleSuggestion } from "@/lib/case-lifecycle";
+import { nextStoredLifecycleSuggestion } from "@/lib/case-lifecycle";
 import { prisma } from "@/lib/prisma";
 import { deriveSituationTitle, INTAKE_CASE_DOMAIN, isMeaningfulSituation } from "@/lib/situation-title";
 
@@ -74,6 +74,12 @@ export async function saveAnalysisAsCase(input: SaveAnalysisAsCaseInput): Promis
       { role: "assistant", content: assistantMessage },
     ],
   });
+  const storedLifecycleSuggestion = nextStoredLifecycleSuggestion({
+    lifecycleState: "under_analysis",
+    nextAnalysis: input.analysisResult,
+    previousStored: null,
+    aiSuggestion: lifecycleSuggestion,
+  });
 
   await prisma.case.create({
     data: {
@@ -87,8 +93,8 @@ export async function saveAnalysisAsCase(input: SaveAnalysisAsCaseInput): Promis
       priorityUrgency: input.analysisResult.priority?.urgency ?? null,
       priorityStake: input.analysisResult.priority?.stake ?? null,
       priorityNote: input.analysisResult.priority?.note ?? null,
-      ...(lifecycleSuggestion
-        ? { lifecycleSuggestion: toStoredLifecycleSuggestion(lifecycleSuggestion) }
+      ...(storedLifecycleSuggestion
+        ? { lifecycleSuggestion: storedLifecycleSuggestion }
         : {}),
       branchId: null,
       outcomeId: null,

@@ -26,7 +26,7 @@ import {
   visibleDashboardReopen,
   type DashboardCaseInput,
 } from "@/lib/case-dashboard";
-import { deriveReopenSuggestion } from "@/lib/decision-cycle";
+import { deriveReopenSuggestion, analysisCycleKey } from "@/lib/decision-cycle";
 import { priorityColorBadgeClass, priorityColorMarkerClass } from "@/lib/priority";
 
 function assert(condition: boolean, message: string): void {
@@ -461,10 +461,12 @@ assert(
     baseCase({
       id: "suggest-status",
       lifecycleState: "under_analysis",
+      analysisResult: unresolvedMunicipal,
       lifecycleSuggestion: {
         state: "waiting_for_fact",
         reason: "Нужно запросить разъяснение.",
         dismissed: false,
+        analysisKey: analysisCycleKey(unresolvedMunicipal),
       },
     }),
   ).statusLine === "Требует подтверждения",

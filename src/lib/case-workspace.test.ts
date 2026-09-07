@@ -258,6 +258,7 @@ const lifecycleSuggestion = readFileSync(
 );
 const reopenSuggestion = readFileSync(path.join(root, "src/app/cases/[id]/CaseReopenSuggestionCard.tsx"), "utf8");
 const dialogue = readFileSync(path.join(root, "src/app/cases/[id]/CaseDialogueLauncher.tsx"), "utf8");
+const dialogueComponent = readFileSync(path.join(root, "src/app/cases/[id]/CaseDialogue.tsx"), "utf8");
 const executionPanel = readFileSync(path.join(root, "src/app/cases/[id]/CaseExecutionPanel.tsx"), "utf8");
 
 assert(page.includes("← Решения"), "back link remains");
@@ -328,6 +329,11 @@ assert(page.includes("CaseDialogueLauncher"), "K: continue-analysis remains acce
 assert(page.includes("secondary={Boolean(reopenSuggestion || lifecycleSuggestion || executionSuggestion)}"), "K: continue-analysis recedes when approval is required");
 assert(dialogue.includes("onSuccess={() => setIsOpen(false)}"), "C: dialogue closes after submit so summary is visible");
 assert(dialogue.includes("Сообщить, что изменилось в ситуации"), "K: launcher has supporting copy");
+assert(page.includes("NextStepResultButton"), "next-step result action is on the workspace");
+assert(page.includes("shouldShowNextStepResultAction"), "next-step result visibility is server-derived");
+assert(page.includes("visibleNextStepReportText"), "next-step report text is server-derived");
+assert(dialogueComponent.includes('mode === "next_step_result"'), "dialogue supports next-step result mode");
+assert(!dialogueComponent.includes("completeCaseExecution"), "result submit does not auto-complete execution");
 assert(!dialogue.includes("Продолжить разбор"), "K: previous continue-analysis phrasing is gone");
 assert(!dialogue.includes("Обсудить с ИИ"), "K: chatbot phrasing is gone");
 assert(!dialogue.includes("messages.length"), "K: message count is not in the primary UI");

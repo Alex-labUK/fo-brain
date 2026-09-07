@@ -109,6 +109,8 @@ If case memory says the Principal already approved the route, and the latest mes
 
 A closed case never shows this card. `visibleLifecycleSuggestion` returns null while `lifecycleState` is `closed`. Closing (or later reopening) also dismisses the stored JSON so an obsolete pre-closure recommendation cannot reappear. Lifecycle state remains the only source of truth; the suggestion stays advisory.
 
+Stored lifecycle suggestions carry an `analysisKey` (same derivation as decision-cycle reopen). After each successful analysis write, FO Brain stores a fresh suggestion for the current analysis or clears the field. `visibleLifecycleSuggestion` hides any stored suggestion whose `analysisKey` does not match the current analysis, and rejects waiting-state guidance when the current analysis is already resolved. If AI lifecycle generation fails, a deterministic fallback derived from the current analysis is stored instead — the previous cycle’s suggestion must never remain visible as if current.
+
 AI analysis and dialogue updates must still never persist `lifecycleState`, `blockerType`, `blockerNote`, or `lifecycleUpdatedAt`.
 
 ---

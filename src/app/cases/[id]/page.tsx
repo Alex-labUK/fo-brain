@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CaseDetailControls } from "@/app/cases/[id]/CaseDetailControls";
 import { CaseDialogueLauncher } from "@/app/cases/[id]/CaseDialogueLauncher";
+import { NextStepResultButton } from "@/app/cases/[id]/NextStepResultButton";
 import { DecisionChangeSummaryBanner } from "@/app/cases/[id]/DecisionChangeSummaryBanner";
 import { CaseExecutionPanel } from "@/app/cases/[id]/CaseExecutionPanel";
 import { CaseExecutionSuggestionCard } from "@/app/cases/[id]/CaseExecutionSuggestionCard";
@@ -45,6 +46,10 @@ import {
   workspaceOutcome,
   workspacePriorityLabel,
 } from "@/lib/case-workspace";
+import {
+  shouldShowNextStepResultAction,
+  visibleNextStepReportText,
+} from "@/lib/next-step-result-flow";
 
 export const dynamic = "force-dynamic";
 
@@ -93,10 +98,14 @@ export default async function CaseDetailPage({ params }: PageProps) {
     lifecycleState: caseItem.lifecycleState,
     executionStatus: caseItem.executionStatus,
   });
-  const lifecycleSuggestion = visibleLifecycleSuggestion(caseItem.lifecycleSuggestion, {
-    lifecycleState: caseItem.lifecycleState,
-    blockerNote: caseItem.blockerNote,
-  });
+  const lifecycleSuggestion = visibleLifecycleSuggestion(
+    caseItem.lifecycleSuggestion,
+    {
+      lifecycleState: caseItem.lifecycleState,
+      blockerNote: caseItem.blockerNote,
+    },
+    storedAnalysis,
+  );
   const storedExecution = {
     executionStep: caseItem.executionStep,
     executionOwner: caseItem.executionOwner,
@@ -145,6 +154,22 @@ export default async function CaseDetailPage({ params }: PageProps) {
       nextStep.primary,
       nextStep.support,
     ]);
+
+  const nextStepReportText = visibleNextStepReportText({
+    showFactGathering,
+    nextStepPrimary: nextStep.primary,
+    executionPlacement,
+    executionStep: storedExecution.executionStep,
+    executionStatus: storedExecution.executionStatus,
+  });
+  const showNextStepResultAction = shouldShowNextStepResultAction({
+    visibleStepText: nextStepReportText,
+    lifecycleState: caseItem.lifecycleState,
+    reopenSuggestionVisible: Boolean(reopenSuggestion),
+    showFactGathering,
+    executionPlacement,
+    executionStatus: storedExecution.executionStatus,
+  });
 
   const executionPanel =
     storedExecution.executionStatus && storedExecution.executionStep ? (
@@ -196,6 +221,11 @@ export default async function CaseDetailPage({ params }: PageProps) {
         </div>
       )}
 
+      <CaseDialogueLauncher
+        caseId={caseItem.id}
+        messages={messages}
+        secondary={Boolean(reopenSuggestion || lifecycleSuggestion || executionSuggestion)}
+      >
       <DecisionChangeSummaryBanner
         caseId={caseItem.id}
         dialogueRevision={messages.at(-1)?.id ?? null}
@@ -242,6 +272,12 @@ export default async function CaseDetailPage({ params }: PageProps) {
           {nextStep.owner && (
             <p className={`mt-3 pl-9 ${workspaceType.muted}`}>{workspaceNextStepOwnerLine(nextStep.owner)}</p>
           )}
+          {nextStepReportText && (
+            <NextStepResultButton
+              visible={showNextStepResultAction && showFactGathering}
+              stepText={nextStepReportText}
+            />
+          )}
         </section>
       )}
 
@@ -249,6 +285,12 @@ export default async function CaseDetailPage({ params }: PageProps) {
         <section className={`mt-6 ${workspaceNextStepSurfaceClass}`}>
           <p className={workspaceType.kicker}>Следующий шаг</p>
           <div className="mt-3">{executionPanel}</div>
+          {nextStepReportText && (
+            <NextStepResultButton
+              visible={showNextStepResultAction}
+              stepText={nextStepReportText}
+            />
+          )}
         </section>
       )}
 
@@ -272,15 +314,17 @@ export default async function CaseDetailPage({ params }: PageProps) {
         <section className={`mt-6 ${workspaceNextStepSurfaceClass}`}>
           <p className={workspaceType.kicker}>Следующий шаг</p>
           <div className="mt-3">{executionPanel}</div>
+          {nextStepReportText && (
+            <NextStepResultButton
+              visible={showNextStepResultAction}
+              stepText={nextStepReportText}
+            />
+          )}
         </section>
       )}
       {executionPlacement === "quiet" && <div className="mt-6">{executionPanel}</div>}
 
-      <CaseDialogueLauncher
-        caseId={caseItem.id}
-        messages={messages}
-        secondary={Boolean(reopenSuggestion || lifecycleSuggestion || executionSuggestion)}
-      />
+      </CaseDialogueLauncher>
 
       <section className="mt-14 border-t border-zinc-200 pt-8">
         <h2 className={workspaceType.section}>Дополнительно</h2>

@@ -25,7 +25,8 @@
     "test:intake": "tsx src/app/analyze/situation-intake.test.ts",
     "test:workspace": "tsx src/lib/case-workspace.test.ts",
     "test:change-summary": "tsx src/lib/decision-change-summary.test.ts",
-    "test": "npm run test:analysis && npm run test:proposals && npm run test:execution && npm run test:reopen && npm run test:dashboard && npm run test:intake && npm run test:workspace && npm run test:change-summary",
+    "test:next-step-result": "tsx src/lib/next-step-result-flow.test.ts",
+    "test": "npm run test:analysis && npm run test:proposals && npm run test:execution && npm run test:reopen && npm run test:dashboard && npm run test:intake && npm run test:workspace && npm run test:change-summary && npm run test:next-step-result",
     "postinstall": "prisma generate"
   },
   "prisma": {

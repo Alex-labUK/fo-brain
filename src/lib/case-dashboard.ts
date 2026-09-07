@@ -180,10 +180,14 @@ function hasVisibleLifecycleSuggestion(input: DashboardCaseInput): boolean {
   const lifecycle = lifecycleOf(input);
   if (!lifecycle || lifecycle === "closed") return false;
   return Boolean(
-    visibleLifecycleSuggestion(input.lifecycleSuggestion, {
-      lifecycleState: lifecycle,
-      blockerNote: input.blockerNote ?? null,
-    }),
+    visibleLifecycleSuggestion(
+      input.lifecycleSuggestion,
+      {
+        lifecycleState: lifecycle,
+        blockerNote: input.blockerNote ?? null,
+      },
+      tryAnalysis(input.analysisResult),
+    ),
   );
 }
 

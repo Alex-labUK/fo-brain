@@ -10,6 +10,7 @@ import { CaseExecutionSuggestionCard } from "@/app/cases/[id]/CaseExecutionSugge
 import { CaseLifecyclePanel } from "@/app/cases/[id]/CaseLifecyclePanel";
 import { CaseLifecycleSuggestionCard } from "@/app/cases/[id]/CaseLifecycleSuggestionCard";
 import { CaseReopenSuggestionCard } from "@/app/cases/[id]/CaseReopenSuggestionCard";
+import { RelevantPastDecisions } from "@/app/cases/[id]/RelevantPastDecisions";
 import { WorkspaceDetails } from "@/app/cases/[id]/WorkspaceDetails";
 import {
   workspaceDecisionSurfaceClass,
@@ -60,6 +61,11 @@ import {
   shouldShowNextStepResultAction,
   visibleNextStepReportText,
 } from "@/lib/next-step-result-flow";
+import {
+  currentDecisionQueryFromWorkspace,
+  findRelevantPastDecisions,
+  shouldShowRelevantPastDecisions,
+} from "@/lib/relevant-past-decisions";
 
 export const dynamic = "force-dynamic";
 
@@ -166,6 +172,10 @@ export default async function CaseDetailPage({ params }: PageProps) {
   const showActiveNextStep = shouldShowActiveWorkspaceNextStep({
     lifecycleState: caseItem.lifecycleState,
   });
+  const showRelevantPast = shouldShowRelevantPastDecisions({
+    lifecycleState: caseItem.lifecycleState,
+    reopenSuggestionVisible: Boolean(reopenSuggestion),
+  });
   const renderedAt = new Date().toISOString();
   const outcomeText = workspaceOutcome(storedAnalysis) || caseItem.outcome?.statement?.trim() || null;
   const decisionText = workspaceDecision(storedAnalysis) || (!storedAnalysis ? caseItem.recordedResult : null);
@@ -208,6 +218,27 @@ export default async function CaseDetailPage({ params }: PageProps) {
     executionPlacement,
     executionStatus: storedExecution.executionStatus,
   });
+  const relevantPastDecisions = showRelevantPast
+    ? findRelevantPastDecisions({
+        current: currentDecisionQueryFromWorkspace({
+          caseId: caseItem.id,
+          title: caseItem.title,
+          outcome: outcomeText,
+          decision: decisionText,
+          determiningFact,
+          caseMemory: caseItem.caseMemory,
+        }),
+        historical: await prisma.case.findMany({
+          where: { id: { not: caseItem.id } },
+          select: {
+            id: true,
+            title: true,
+            decisionRecord: true,
+            decisionCycleHistory: true,
+          },
+        }),
+      })
+    : [];
 
   const executionPanel =
     storedExecution.executionStatus && storedExecution.executionStep ? (
@@ -373,6 +404,8 @@ export default async function CaseDetailPage({ params }: PageProps) {
       {executionPlacement === "quiet" && <div className="mt-6">{executionPanel}</div>}
 
       </CaseDialogueLauncher>
+
+      {showRelevantPast ? <RelevantPastDecisions items={relevantPastDecisions} /> : null}
 
       <section className="mt-14 border-t border-zinc-200 pt-8">
         <h2 className={workspaceType.section}>Дополнительно</h2>

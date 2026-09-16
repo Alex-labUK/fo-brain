@@ -156,6 +156,20 @@ A closed workspace must not look operational. The Decision Record is the primary
 
 ---
 
+## Relevant Past Decisions
+
+Closed Decision Records are institutional memory, not authority. On an **active** Decision Workspace (or a closed case with a visible reopen suggestion), FO Brain may show up to **3** compact «Похожие прошлые кейсы» cards **below** the current Decision / Next Step / FO Brain guidance. They are display-only: they do not copy a past decision, auto-resolve, or change fork, determining fact, priority, lifecycle, or execution.
+
+Sources are persisted Decision Records only: `Case.decisionRecord` and archived records inside `decisionCycleHistory`. Raw `analysisResult` is never treated as a verified historical decision. Legacy closed cases without a record are skipped, not fabricated. The current case is excluded; v1 prefers cross-case history.
+
+Retrieval is deterministic and local: normalize title / outcome / decision / determining fact, then weighted token overlap (Jaccard-style). Determining fact, decision, and outcome weigh more than factual outcome. `caseMemory` may reinforce overlapping tokens but does not flood the query. At most one card per source case. Results below a centralized threshold are dropped — 0–3 cards, never weak filler. Resolved records rank above unresolved when scores are close. Unresolved closures are labeled as closed without a final decision. `relevanceScore` is internal; the UI never shows a similarity percentage.
+
+No new AI call, embeddings, or vector index. Matching lives in `findRelevantPastDecisions`, not in `page.tsx`, so a later semantic matcher can replace it without changing the UI contract. Decision Engine prompts (initial, continue, lifecycle, execution, Decision Change Summary) do not receive these records.
+
+Normally closed cases hide the section because their own Decision Record is already primary.
+
+---
+
 ## Reopen / new decision cycle
 
 If a closed, resolved case later receives a genuine new uncertainty, the Decision Engine may set `decisionStatus` back to `unresolved`. Lifecycle stays `closed` until a human applies «возобновить кейс».

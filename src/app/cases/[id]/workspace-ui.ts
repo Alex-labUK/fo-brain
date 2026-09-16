@@ -61,6 +61,12 @@ export const workspaceGuidanceSurfaceClass =
 export const workspaceReopenSurfaceClass =
   "rounded-2xl border border-zinc-200 border-l-2 border-l-amber-500 bg-white px-5 py-4 shadow-sm";
 
+export const workspaceRecordSurfaceClass =
+  "rounded-2xl border border-emerald-200 border-l-2 border-l-emerald-500 bg-emerald-50/50 px-5 py-4 shadow-sm";
+
+export const workspaceUnresolvedRecordSurfaceClass =
+  "rounded-2xl border border-zinc-200 border-l-2 border-l-zinc-400 bg-zinc-50 px-5 py-4 shadow-sm";
+
 export function workspaceStatusBadgeClass(input: {
   lifecycleState: string;
   executionStatus?: string | null;

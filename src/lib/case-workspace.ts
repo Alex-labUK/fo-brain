@@ -445,27 +445,60 @@ export function workspaceExecutionPlacement(input: {
   lifecycleState?: string;
 }): WorkspaceExecutionPlacement {
   if (!input.hasExecution) return "none";
+  if (input.lifecycleState === "closed") return "history";
   if (input.executionStatus === "pending") return "primary";
   if (isHistoricalCompletedExecution(input)) return "history";
   if (input.executionStatus === "completed") return "quiet";
   return "none";
 }
 
+export function shouldShowWorkspacePriority(input: {
+  lifecycleState: string;
+  reopenSuggestionVisible: boolean;
+}): boolean {
+  if (input.lifecycleState !== "closed") return true;
+  return input.reopenSuggestionVisible;
+}
+
+export function shouldShowActiveWorkspaceNextStep(input: {
+  lifecycleState: string;
+}): boolean {
+  return input.lifecycleState !== "closed";
+}
+
+export function shouldShowPrimaryDecisionSurface(input: {
+  lifecycleState: string;
+  reopenSuggestionVisible: boolean;
+}): boolean {
+  if (input.lifecycleState !== "closed") return true;
+  return input.reopenSuggestionVisible;
+}
+
+export function shouldShowHistoricalDecisionSurface(input: {
+  lifecycleState: string;
+  reopenSuggestionVisible: boolean;
+}): boolean {
+  return input.lifecycleState === "closed" && !input.reopenSuggestionVisible;
+}
+
 export function previousCyclesLabel(count: number): string {
   if (count <= 0) return "";
-  if (count === 1) return "1 цикл";
   const mod10 = count % 10;
   const mod100 = count % 100;
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) {
-    return `${count} цикла`;
+  if (mod10 === 1 && mod100 !== 11) {
+    return `${count} предыдущий цикл`;
   }
-  return `${count} циклов`;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) {
+    return `${count} предыдущих цикла`;
+  }
+  return `${count} предыдущих циклов`;
 }
 
 export function previousCyclePreview(cycle: DecisionCycleRecord): {
   resolution: string | null;
   execution: string | null;
   closedAt: string | null;
+  factualOutcome: string | null;
 } {
   let resolution: string | null = null;
   if (cycle.analysis && typeof cycle.analysis === "object" && cycle.analysis !== null && "sections" in cycle.analysis) {
@@ -483,10 +516,21 @@ export function previousCyclePreview(cycle: DecisionCycleRecord): {
     }
   }
 
+  const record =
+    cycle.decisionRecord && typeof cycle.decisionRecord === "object"
+      ? (cycle.decisionRecord as { factualOutcome?: unknown; decision?: unknown })
+      : null;
+  const factualOutcome =
+    typeof record?.factualOutcome === "string" ? record.factualOutcome.trim() || null : null;
+  if (!resolution && typeof record?.decision === "string") {
+    resolution = record.decision.trim() || null;
+  }
+
   return {
     resolution,
     execution: cycle.executionStep?.trim() || null,
     closedAt: cycle.closedAt,
+    factualOutcome,
   };
 }
 

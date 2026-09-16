@@ -34,6 +34,7 @@ export function CaseDetailControls({ caseItem, embedded = false }: CaseDetailCon
 
   const isActive =
     caseItem.status === "real_in_progress" || caseItem.status === "hypothetical";
+  // CaseStatus.real_closed is a legacy record flag, not case closure.
   const isClosedOrCancelled =
     caseItem.status === "real_closed" || caseItem.status === "cancelled";
 
@@ -90,24 +91,14 @@ export function CaseDetailControls({ caseItem, embedded = false }: CaseDetailCon
         {!embedded && <h2 className="text-sm font-semibold text-zinc-900">Действия</h2>}
         <div className={embedded ? "flex flex-wrap gap-2" : "mt-3 flex flex-wrap gap-2"}>
           {isActive && (
-            <>
-              <button
-                type="button"
-                disabled={isPending}
-                onClick={() => handleStatusChange("real_closed")}
-                className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-800 hover:bg-emerald-100 disabled:opacity-60"
-              >
-                Завершить
-              </button>
-              <button
-                type="button"
-                disabled={isPending}
-                onClick={() => handleStatusChange("cancelled")}
-                className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 disabled:opacity-60"
-              >
-                Отменить
-              </button>
-            </>
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={() => handleStatusChange("cancelled")}
+              className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 disabled:opacity-60"
+            >
+              Отменить
+            </button>
           )}
           {isClosedOrCancelled && (
             <button

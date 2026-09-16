@@ -1,7 +1,7 @@
 # Case Status and Case Lifecycle
 
-Version: 1.3  
-Status: Stage 3 implementation note, with decision-resolution and execution context  
+Version: 1.4  
+Status: Stage 3 implementation note, with decision-resolution, execution, and Decision Record  
 Path: `docs/architecture/case-lifecycle.md`
 
 ---
@@ -126,6 +126,33 @@ AI analysis and dialogue updates must still never persist `lifecycleState`, `blo
 7. `decisionStatus` on `AnalysisResult` is not a lifecycle field. A resolved decision may still be `executing`.
 8. AI must not write execution fields. A resolved decision is not an execution step, and a completed step is not case closure.
 9. A closed case does not auto-reopen. `resolved → unresolved` after closure is a new decision cycle: archive the previous cycle first, then show a human-only reopen recommendation.
+10. Closing a case is a human action. `decisionStatus = resolved` never auto-closes lifecycle. A Decision Record is created only in `updateCaseLifecycle` when lifecycle becomes `closed`.
+
+---
+
+## Case Closure & Decision Record
+
+`resolved` and `closed` are different states. A decision may be resolved while execution or monitoring continues. FO Brain never closes a case because analysis became resolved.
+
+A Decision Record is a compact, immutable historical snapshot written onto `Case.decisionRecord` in the same `updateCaseLifecycle` transaction that sets `lifecycleState = closed`. It is built deterministically from current analysis, optional `resolutionContext`, stored execution, and a human factual outcome. **No additional AI call.**
+
+Shape (version 1): `closedAt`, `cycleNumber`, `analysisKey`, `decisionStatusAtClose`, `outcome`, `decision`, and optional `determiningFact`, `resolvingEvidence`, `executionStep`, `executionOwner`, `executionStatus`, `factualOutcome`. Missing facts are omitted, never guessed.
+
+After unresolved → resolved, `analysisResult` replaces Determining Fact with terminal text. The actual prior fact is captured as `Case.resolutionContext` on that transition only. `resolvingEvidence` is stored only when the triggering message is an explicit Next Step Result (`Результат текущего шага: …`). An ordinary circumstance message is not treated as proof. A new decision cycle clears the context.
+
+The first close finalizes `Case.decisionRecord`. A later close while the case is already closed, or while that record is still the active snapshot, does not rebuild it. Reopen archives/clears the active record; closing a later cycle creates a new one.
+
+User-facing case closure is only the lifecycle path (`Закрыть кейс` dialog via execution, lifecycle dropdown, or apply-closed). `CaseStatus.real_closed` is a legacy record flag. The old «Завершить» control is hidden so it cannot be mistaken for case closure.
+
+When a closed/resolved cycle later becomes unresolved, the active record is copied onto that `decisionCycleHistory` entry and cleared from the case. Apply reopen starts a new active cycle with no current record. A later close creates a new record for the new cycle; the archived one is unchanged.
+
+Unresolved cases may still be closed. The record keeps `decisionStatusAtClose = unresolved` and the current fork/fact. Closing does not change `decisionStatus`. If later evidence arrives while the case remains closed and unresolved, FO Brain can show the existing human-only reopen recommendation. Lifecycle can also be changed from «Статус кейса».
+
+If the user enters «Фактический итог», it is stored as entered (after sanitation) on the record. It is also prepended to `caseMemory` as `Итог закрытия: …` using the existing 15-line normalize/cap, so a later reopen can see it without a second memory store. Empty outcome does not write memory.
+
+Old closed cases without `decisionRecord` stay usable. FO Brain does not backfill guessed records.
+
+A closed workspace must not look operational. The Decision Record is the primary surface. Live Decision / Determining Fact / Next Step are not shown as active work. The last analysis may remain under «Разбор на момент закрытия». Unresolved closure uses «Итог кейса» and does not imply the decision was resolved. Factual outcome never changes `decisionStatus`. Active urgency is hidden unless a reopen recommendation is visible.
 
 ---
 

@@ -18,6 +18,7 @@ export type DecisionCycleRecord = {
   executionStatus: ExecutionStatus | null;
   executionUpdatedAt: string | null;
   closedAt: string | null;
+  decisionRecord?: unknown | null;
 };
 
 export type ReopenSuggestion = {
@@ -182,6 +183,7 @@ export function nextStoredReopenSuggestion(input: {
 
   if (
     input.previousDecisionStatus === "resolved" ||
+    input.previousDecisionStatus === "unresolved" ||
     (previous && previous.analysisKey !== derived.analysisKey)
   ) {
     return { ...derived, dismissed: false };
@@ -204,7 +206,7 @@ export function parseDecisionCycleHistory(raw: unknown): DecisionCycleRecord[] {
       continue;
     }
     const executionStatus = isExecutionStatus(item.executionStatus) ? item.executionStatus : null;
-    cycles.push({
+    const cycle: DecisionCycleRecord = {
       archivedAt: item.archivedAt,
       analysis: item.analysis ?? null,
       executionStep: typeof item.executionStep === "string" ? item.executionStep : null,
@@ -212,7 +214,11 @@ export function parseDecisionCycleHistory(raw: unknown): DecisionCycleRecord[] {
       executionStatus,
       executionUpdatedAt: typeof item.executionUpdatedAt === "string" ? item.executionUpdatedAt : null,
       closedAt: typeof item.closedAt === "string" ? item.closedAt : null,
-    });
+    };
+    if ("decisionRecord" in item) {
+      cycle.decisionRecord = item.decisionRecord ?? null;
+    }
+    cycles.push(cycle);
   }
   return cycles;
 }
@@ -223,6 +229,7 @@ export function buildDecisionCycleRecord(input: {
   executionUpdatedAt?: Date | string | null;
   closedAt?: Date | string | null;
   archivedAt?: Date;
+  decisionRecord?: unknown | null;
 }): DecisionCycleRecord {
   const archivedAt = (input.archivedAt ?? new Date()).toISOString();
   const toIso = (value?: Date | string | null): string | null => {
@@ -232,7 +239,7 @@ export function buildDecisionCycleRecord(input: {
     return Number.isNaN(parsed.getTime()) ? value : parsed.toISOString();
   };
 
-  return {
+  const record: DecisionCycleRecord = {
     archivedAt,
     analysis: input.analysis,
     executionStep: input.execution.executionStep,
@@ -241,6 +248,10 @@ export function buildDecisionCycleRecord(input: {
     executionUpdatedAt: toIso(input.executionUpdatedAt),
     closedAt: toIso(input.closedAt),
   };
+  if (input.decisionRecord != null) {
+    record.decisionRecord = input.decisionRecord;
+  }
+  return record;
 }
 
 export function appendDecisionCycle(raw: unknown, record: DecisionCycleRecord): DecisionCycleRecord[] {
@@ -292,12 +303,20 @@ export function buildPreviousDecisionCycleContext(raw: unknown): PreviousDecisio
     const fork = analysisSectionContent(cycle.analysis, SECTION_TITLES[1]);
     const status = parseDecisionStatus(cycle.analysis);
     const resolutionStatement = fork?.startsWith("Решение определено:") ? fork : null;
+    const record = isRecord(cycle.decisionRecord) ? cycle.decisionRecord : null;
+    const recordFact =
+      typeof record?.determiningFact === "string" ? record.determiningFact.trim() : "";
+    const analysisFact = analysisSectionContent(cycle.analysis, SECTION_TITLES[2]);
+    const determiningFact =
+      recordFact || (analysisFact && analysisFact !== RESOLVED_DETERMINING_FACT ? analysisFact : null);
+    const recordOutcome = typeof record?.outcome === "string" ? record.outcome.trim() : "";
+    const recordDecision = typeof record?.decision === "string" ? record.decision.trim() : "";
 
     return {
       decisionStatus: status === "resolved" ? "resolved" : resolutionStatement ? "resolved" : status,
-      outcome: analysisSectionContent(cycle.analysis, SECTION_TITLES[0]),
-      fork,
-      determiningFact: analysisSectionContent(cycle.analysis, SECTION_TITLES[2]),
+      outcome: recordOutcome || analysisSectionContent(cycle.analysis, SECTION_TITLES[0]),
+      fork: recordDecision || fork,
+      determiningFact,
       resolutionStatement,
       executionStep: cycle.executionStep,
       executionOwner: cycle.executionOwner,

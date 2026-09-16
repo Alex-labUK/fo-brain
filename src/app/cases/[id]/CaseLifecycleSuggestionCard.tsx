@@ -2,27 +2,29 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import {
-  applyLifecycleSuggestion,
-  dismissLifecycleSuggestion,
-} from "@/app/cases/[id]/actions";
+import { applyLifecycleSuggestion, dismissLifecycleSuggestion } from "@/app/cases/[id]/actions";
+import { CaseClosureDialog } from "@/app/cases/[id]/CaseClosureDialog";
 import { workspaceGuidanceSurfaceClass, workspaceType } from "@/app/cases/[id]/workspace-ui";
 import { lifecycleLabel, type LifecycleSuggestion } from "@/lib/case-lifecycle";
+import type { ClosurePreview } from "@/lib/decision-record";
 
 type CaseLifecycleSuggestionCardProps = {
   caseId: string;
   suggestion: LifecycleSuggestion;
   showReason?: boolean;
+  closurePreview: ClosurePreview;
 };
 
 export function CaseLifecycleSuggestionCard({
   caseId,
   suggestion,
   showReason = true,
+  closurePreview,
 }: CaseLifecycleSuggestionCardProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [closing, setClosing] = useState(false);
 
   function run(action: () => Promise<void>) {
     setError(null);
@@ -53,7 +55,13 @@ export function CaseLifecycleSuggestionCard({
         <button
           type="button"
           disabled={isPending}
-          onClick={() => run(() => applyLifecycleSuggestion(caseId))}
+          onClick={() => {
+            if (suggestion.state === "closed") {
+              setClosing(true);
+              return;
+            }
+            run(() => applyLifecycleSuggestion(caseId));
+          }}
           className="rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-60"
         >
           {isPending ? "Сохранение…" : "Применить"}
@@ -68,6 +76,13 @@ export function CaseLifecycleSuggestionCard({
         </button>
       </div>
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+      <CaseClosureDialog
+        caseId={caseId}
+        preview={closurePreview}
+        open={closing}
+        onClose={() => setClosing(false)}
+        onClosed={() => router.refresh()}
+      />
     </section>
   );
 }

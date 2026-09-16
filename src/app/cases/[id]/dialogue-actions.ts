@@ -11,10 +11,12 @@ import { nextStoredLifecycleSuggestion } from "@/lib/case-lifecycle";
 import { isExecutionStatus } from "@/lib/case-execution";
 import {
   appendDecisionCycle,
+  analysisCycleKey,
   buildDecisionCycleRecord,
   nextStoredReopenSuggestion,
   shouldArchiveResolvedCycle,
 } from "@/lib/decision-cycle";
+import { nextResolutionContext, parseDecisionRecord } from "@/lib/decision-record";
 import {
   buildDecisionChangeSummary,
   deriveDecisionChangeTransitionKey,
@@ -62,6 +64,8 @@ export async function postCaseMessage(
       executionUpdatedAt: true,
       decisionCycleHistory: true,
       reopenSuggestion: true,
+      resolutionContext: true,
+      decisionRecord: true,
       priorityUrgency: true,
       priorityStake: true,
       priorityNote: true,
@@ -156,9 +160,21 @@ export async function postCaseMessage(
             },
             executionUpdatedAt: caseItem.executionUpdatedAt,
             closedAt: caseItem.lifecycleState === "closed" ? caseItem.lifecycleUpdatedAt : null,
+            decisionRecord: parseDecisionRecord(caseItem.decisionRecord),
           }),
         )
       : null;
+
+    const nextContext = archivedHistory
+      ? null
+      : nextResolutionContext({
+          previousStatus: currentDecisionStatus,
+          nextStatus: nextDecisionStatus,
+          previousDeterminingFact: currentDeterminingFact,
+          resolvingEvidence: trimmed,
+          nextAnalysisKey: analysisCycleKey(run.result),
+          previousContext: caseItem.resolutionContext,
+        });
 
     const reopenSuggestion = nextStoredReopenSuggestion({
       lifecycleState: caseItem.lifecycleState,
@@ -192,6 +208,8 @@ export async function postCaseMessage(
       lifecycleSuggestion: Prisma.InputJsonValue | typeof Prisma.DbNull;
       decisionCycleHistory?: Prisma.InputJsonValue;
       reopenSuggestion: Prisma.InputJsonValue | typeof Prisma.DbNull;
+      resolutionContext?: Prisma.InputJsonValue | typeof Prisma.DbNull;
+      decisionRecord?: Prisma.InputJsonValue | typeof Prisma.DbNull;
       priorityUrgency?: string | null;
       priorityStake?: string | null;
       priorityNote?: string | null;
@@ -203,10 +221,13 @@ export async function postCaseMessage(
         ? (nextLifecycleStored as Prisma.InputJsonValue)
         : Prisma.DbNull,
       reopenSuggestion: reopenSuggestion ?? Prisma.DbNull,
+      resolutionContext: nextContext ? (nextContext as Prisma.InputJsonValue) : Prisma.DbNull,
     };
 
     if (archivedHistory) {
       caseUpdate.decisionCycleHistory = archivedHistory as Prisma.InputJsonValue;
+      caseUpdate.decisionRecord = Prisma.DbNull;
+      caseUpdate.resolutionContext = Prisma.DbNull;
     }
 
     if (run.result.priority) {

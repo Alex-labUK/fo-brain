@@ -145,6 +145,8 @@ model Case {
   executionUpdatedAt  DateTime?
   decisionCycleHistory Json?
   reopenSuggestion     Json?
+  resolutionContext    Json?
+  decisionRecord       Json?
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 

@@ -196,4 +196,16 @@ assert(
 
 assert(deriveReopenSuggestion(resolvedAnalysis) === null, "resolved analysis cannot derive a reopen suggestion");
 
+const unresolvedClosedReopen = nextStoredReopenSuggestion({
+  lifecycleState: "closed",
+  previousDecisionStatus: "unresolved",
+  nextAnalysis: materialReopen,
+  previousStored: null,
+});
+assert(unresolvedClosedReopen !== null && !unresolvedClosedReopen.dismissed, "closed unresolved + later evidence can recommend reopen");
+assert(
+  visibleReopenSuggestion(unresolvedClosedReopen, { lifecycleState: "closed", analysis: materialReopen }) !== null,
+  "closed unresolved reopen card is visible after new evidence",
+);
+
 console.log("Decision cycle reopen test passed.");

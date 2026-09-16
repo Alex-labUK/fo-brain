@@ -3,6 +3,7 @@
 import type { CaseBlockerType, CaseLifecycleState, CaseStatus } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
+import { normalizeAnalysisResult } from "@/core/orchestration/analysis-core";
 import {
   hasLifecycleChanged,
   isBlockerType,
@@ -11,12 +12,17 @@ import {
   parseStoredLifecycleSuggestion,
   storedLifecycleSuggestionAfterClose,
 } from "@/lib/case-lifecycle";
-import { closedLifecycleFromExecution, normalizeExecutionWrite } from "@/lib/case-execution";
+import {
+  closedLifecycleFromExecution,
+  isExecutionStatus,
+  normalizeExecutionWrite,
+} from "@/lib/case-execution";
 import {
   dismissStoredReopenSuggestion,
   parseStoredReopenSuggestion,
   reopenLifecycleUpdate,
 } from "@/lib/decision-cycle";
+import { archiveActiveDecisionRecord, lifecycleCloseWrite, shouldFinalizeDecisionRecord } from "@/lib/decision-record";
 import { prisma } from "@/lib/prisma";
 
 function revalidateCasePaths(id: string): void {
@@ -69,6 +75,7 @@ export type UpdateCaseLifecycleInput = {
   lifecycleState: CaseLifecycleState;
   blockerType: CaseBlockerType;
   blockerNote?: string | null;
+  factualOutcome?: string | null;
 };
 
 export async function updateCaseLifecycle(
@@ -90,6 +97,17 @@ export async function updateCaseLifecycle(
       blockerType: true,
       blockerNote: true,
       lifecycleSuggestion: true,
+      lifecycleUpdatedAt: true,
+      analysisResult: true,
+      resolutionContext: true,
+      decisionRecord: true,
+      decisionCycleHistory: true,
+      caseMemory: true,
+      executionStep: true,
+      executionOwner: true,
+      executionStatus: true,
+      executionUpdatedAt: true,
+      outcome: { select: { statement: true } },
     },
   });
 
@@ -126,6 +144,9 @@ export async function updateCaseLifecycle(
     blockerNote: typeof next.blockerNote;
     lifecycleUpdatedAt?: Date;
     lifecycleSuggestion?: Prisma.InputJsonValue | typeof Prisma.DbNull;
+    decisionRecord?: Prisma.InputJsonValue | typeof Prisma.DbNull;
+    decisionCycleHistory?: Prisma.InputJsonValue;
+    caseMemory?: string;
   } = {
     lifecycleState: next.lifecycleState,
     blockerType: next.blockerType,
@@ -138,6 +159,62 @@ export async function updateCaseLifecycle(
 
   if (shouldDismissSuggestion) {
     data.lifecycleSuggestion = dismissedSuggestion ?? Prisma.DbNull;
+  }
+
+  const storedExecution = {
+    executionStep: caseItem.executionStep,
+    executionOwner: caseItem.executionOwner,
+    executionStatus: isExecutionStatus(caseItem.executionStatus) ? caseItem.executionStatus : null,
+  };
+
+  if (caseItem.lifecycleState !== "closed" && next.lifecycleState === "closed") {
+    if (
+      shouldFinalizeDecisionRecord({
+        currentLifecycle: caseItem.lifecycleState,
+        nextLifecycle: next.lifecycleState,
+        existingRecord: caseItem.decisionRecord,
+      })
+    ) {
+      let storedAnalysis = null;
+      if (caseItem.analysisResult) {
+        try {
+          storedAnalysis = normalizeAnalysisResult(caseItem.analysisResult);
+        } catch {
+          storedAnalysis = null;
+        }
+      }
+      const closedAt = data.lifecycleUpdatedAt ?? new Date();
+      data.lifecycleUpdatedAt = closedAt;
+      const write = lifecycleCloseWrite({
+        closedAt,
+        history: caseItem.decisionCycleHistory,
+        analysis: storedAnalysis,
+        outcomeStatement: caseItem.outcome?.statement,
+        resolutionContext: caseItem.resolutionContext,
+        execution: storedExecution,
+        caseMemory: caseItem.caseMemory,
+        factualOutcome: input.factualOutcome,
+      });
+      data.decisionRecord = write.decisionRecord as Prisma.InputJsonValue;
+      data.caseMemory = write.caseMemory;
+    }
+  }
+
+  if (caseItem.lifecycleState === "closed" && next.lifecycleState !== "closed") {
+    const detached = archiveActiveDecisionRecord({
+      history: caseItem.decisionCycleHistory,
+      decisionRecord: caseItem.decisionRecord,
+      analysis: caseItem.analysisResult,
+      execution: storedExecution,
+      executionUpdatedAt: caseItem.executionUpdatedAt,
+      closedAt: caseItem.lifecycleUpdatedAt,
+    });
+    if (detached.history) {
+      data.decisionCycleHistory = detached.history as Prisma.InputJsonValue;
+    }
+    if (detached.clearActive) {
+      data.decisionRecord = Prisma.DbNull;
+    }
   }
 
   await prisma.case.update({
@@ -306,9 +383,20 @@ export async function clearCaseExecution(id: string): Promise<void> {
 }
 
 /** Closes via the existing lifecycle path. Does not invent a second closure mechanism. */
-export async function closeCaseAfterExecution(id: string): Promise<void> {
+export async function closeCase(
+  id: string,
+  input?: { factualOutcome?: string | null },
+): Promise<void> {
   const closed = closedLifecycleFromExecution();
-  await updateCaseLifecycle(id, closed);
+  await updateCaseLifecycle(id, {
+    ...closed,
+    factualOutcome: input?.factualOutcome,
+  });
+}
+
+/** Closes via the existing lifecycle path. Does not invent a second closure mechanism. */
+export async function closeCaseAfterExecution(id: string): Promise<void> {
+  await closeCase(id);
 }
 
 /** Human-only. Archives were already written when analysis became unresolved. */
@@ -342,6 +430,7 @@ export async function applyReopenSuggestion(id: string): Promise<void> {
       executionStatus: null,
       executionUpdatedAt: new Date(),
       reopenSuggestion: { ...stored, dismissed: true },
+      decisionRecord: Prisma.DbNull,
     },
   });
   revalidateCasePaths(id);

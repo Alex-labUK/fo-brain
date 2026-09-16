@@ -2,7 +2,9 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import {
   formatNextStepResultMessage,
+  isNextStepResultMessage,
   NEXT_STEP_RESULT_PREFIX,
+  nextStepResultEvidence,
   shouldShowNextStepResultAction,
   visibleNextStepReportText,
 } from "./next-step-result-flow";
@@ -100,14 +102,14 @@ assert(
 // closed without pending execution
 assert(
   !shouldShowNextStepResultAction({
-    visibleStepText: "Получить ответ",
+    visibleStepText: "Подписать договор",
     lifecycleState: "closed",
     reopenSuggestionVisible: false,
-    showFactGathering: true,
-    executionPlacement: "none",
-    executionStatus: null,
+    showFactGathering: false,
+    executionPlacement: "history",
+    executionStatus: "pending",
   }),
-  "closed case without active operational step hides result action",
+  "closed case never shows an active Next Step result action",
 );
 
 // C. message framing for submit
@@ -116,6 +118,16 @@ assert(
     `${NEXT_STEP_RESULT_PREFIX}Юрист подтвердил письменно, что риск снимается.`,
   "C: result message is framed for dialogue history without completion assumptions",
 );
+assert(
+  isNextStepResultMessage(formatNextStepResultMessage("риск снят")),
+  "result framing is identifiable server-side",
+);
+assert(!isNextStepResultMessage("риск снят"), "a circumstance message is not a Next Step Result");
+assert(
+  nextStepResultEvidence(formatNextStepResultMessage("риск снят")) === "риск снят",
+  "result evidence is the reported remainder, not the prefix",
+);
+assert(nextStepResultEvidence("риск снят") === null, "unframed text is not treated as evidence");
 
 const root = process.cwd();
 const dialogue = readFileSync(path.join(root, "src/app/cases/[id]/CaseDialogue.tsx"), "utf8");

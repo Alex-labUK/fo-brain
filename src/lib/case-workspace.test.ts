@@ -11,8 +11,12 @@ import {
   presentUnresolvedNextStep,
   previousCyclePreview,
   previousCyclesLabel,
+  shouldShowActiveWorkspaceNextStep,
   shouldShowDeterminingFact,
   shouldShowFactGatheringNextStep,
+  shouldShowHistoricalDecisionSurface,
+  shouldShowPrimaryDecisionSurface,
+  shouldShowWorkspacePriority,
   workspaceActionFirstNextStep,
   workspaceDecision,
   workspaceDeterminingFact,
@@ -195,6 +199,42 @@ assert(
   "D: completed execution on a closed case is not dominant",
 );
 
+assert(
+  workspaceExecutionPlacement({
+    hasExecution: true,
+    executionStatus: "pending",
+    decisionStatus: "unresolved",
+    lifecycleState: "closed",
+  }) === "history",
+  "B: pending execution on a closed case is not an active Next Step",
+);
+assert(shouldShowActiveWorkspaceNextStep({ lifecycleState: "closed" }) === false, "B: closed cases hide active Next Step");
+assert(shouldShowActiveWorkspaceNextStep({ lifecycleState: "under_analysis" }) === true, "B: open cases can show Next Step");
+assert(
+  shouldShowPrimaryDecisionSurface({ lifecycleState: "closed", reopenSuggestionVisible: false }) === false,
+  "B: ordinary closed case does not keep live Decision operational",
+);
+assert(
+  shouldShowHistoricalDecisionSurface({ lifecycleState: "closed", reopenSuggestionVisible: false }) === true,
+  "B: ordinary closed analysis is historical",
+);
+assert(
+  shouldShowPrimaryDecisionSurface({ lifecycleState: "closed", reopenSuggestionVisible: true }) === true,
+  "D: closed + reopen keeps the new uncertainty prominent",
+);
+assert(
+  shouldShowHistoricalDecisionSurface({ lifecycleState: "closed", reopenSuggestionVisible: true }) === false,
+  "D: reopen does not bury the new analysis in history",
+);
+assert(
+  shouldShowWorkspacePriority({ lifecycleState: "closed", reopenSuggestionVisible: false }) === false,
+  "closed finished cases do not keep an active urgency badge",
+);
+assert(
+  shouldShowWorkspacePriority({ lifecycleState: "closed", reopenSuggestionVisible: true }) === true,
+  "closed + new uncertainty may keep priority",
+);
+
 assert(workspaceOperationalStatus({ lifecycleState: "under_analysis" }) === "На анализе", "header: under analysis");
 assert(workspaceOperationalStatus({ lifecycleState: "waiting_for_fact" }) === "Ожидаем факт", "header: waiting for fact");
 assert(
@@ -215,9 +255,9 @@ assert(workspacePriorityLabel("red") === "Срочно", "J: urgent is a compact
 assert(workspacePriorityLabel("amber") === "Скоро", "J: soon is a compact priority signal");
 assert(workspacePriorityLabel("green") === null, "J: calm priority has no extra badge");
 
-assert(previousCyclesLabel(1) === "1 цикл", "H: previous-cycle count is readable");
-assert(previousCyclesLabel(2) === "2 цикла", "H: few previous cycles use the dual form");
-assert(previousCyclesLabel(5) === "5 циклов", "H: many previous cycles use the plural");
+assert(previousCyclesLabel(1) === "1 предыдущий цикл", "H: previous-cycle count is readable");
+assert(previousCyclesLabel(2) === "2 предыдущих цикла", "H: few previous cycles use the dual form");
+assert(previousCyclesLabel(5) === "5 предыдущих циклов", "H: many previous cycles use the plural");
 
 const cycle: DecisionCycleRecord = {
   archivedAt: "2026-01-01T00:00:00.000Z",
@@ -234,6 +274,7 @@ const preview = previousCyclePreview(cycle);
 assert(preview.resolution === "Прошлое решение: риск снят.", "H: previous resolution is available");
 assert(preview.execution === "Направить уведомление", "H: previous execution is available");
 assert(preview.closedAt === "2026-01-03T00:00:00.000Z", "H: closed date is available");
+assert(preview.factualOutcome === null, "H: missing Decision Record factual outcome is omitted");
 
 const duplicateFact = normalizeAnalysisResult({
   decisionStatus: "unresolved",
@@ -260,6 +301,7 @@ const reopenSuggestion = readFileSync(path.join(root, "src/app/cases/[id]/CaseRe
 const dialogue = readFileSync(path.join(root, "src/app/cases/[id]/CaseDialogueLauncher.tsx"), "utf8");
 const dialogueComponent = readFileSync(path.join(root, "src/app/cases/[id]/CaseDialogue.tsx"), "utf8");
 const executionPanel = readFileSync(path.join(root, "src/app/cases/[id]/CaseExecutionPanel.tsx"), "utf8");
+const detailControls = readFileSync(path.join(root, "src/app/cases/[id]/CaseDetailControls.tsx"), "utf8");
 
 assert(page.includes("← Решения"), "back link remains");
 assert(page.includes('href="/cases"'), "back link still goes to the register");
@@ -275,7 +317,7 @@ assert(!page.includes("Предыдущих циклов решений"), "H: t
 assert(!page.includes(">Приоритет<") && !page.includes("Приоритет</h2>"), "J: no large Priority heading");
 
 assert(page.includes("Цель:"), "A: Outcome is presented as compact Цель");
-assert(page.includes("kicker}>Решение"), "A: Main Decision Fork is presented as Решение");
+assert(page.includes('"Решение"'), "A: Main Decision Fork is presented as Решение");
 assert(page.includes("Что определит решение"), "A: Determining Fact uses the Russian label");
 assert(page.includes("workspaceActionFirstNextStep"), "A: unresolved next-step is action-first");
 assert(!page.includes("nextStep.remaining"), "A: unresolved Next Step is not a list of remaining actions");
@@ -295,7 +337,12 @@ assert(workspaceUi.includes("border-l-sky-500"), "Next Step keeps the blue opera
 assert(!dialogue.includes("sky-"), "Dialogue launcher is neutral, not blue");
 assert(page.includes("workspaceNextStepSurfaceClass"), "Next Step is a distinct operational surface");
 assert(lifecycleSuggestion.includes("showReason"), "F: recommendation reason is optional in the UI");
-assert(page.includes("decisionSurfaceResolved"), "closed lifecycle uses resolved decision coloring");
+assert(page.includes("decisionSurfaceResolved"), "resolved live Decision keeps resolved coloring");
+assert(page.includes("shouldShowActiveWorkspaceNextStep"), "B: closed cases hide the active Next Step");
+assert(page.includes("shouldShowPrimaryDecisionSurface"), "B: live Decision is gated after closure");
+assert(page.includes("shouldShowHistoricalDecisionSurface"), "B: closed analysis can move to Дополнительно");
+assert(page.includes("shouldShowWorkspacePriority"), "closed cases hide active urgency unless reopened");
+assert(page.includes('title="Разбор на момент закрытия"'), "B: closed live analysis is historical");
 assert(page.includes("workspaceDeterminingFact"), "B: determining fact is gated");
 assert(page.includes("shouldShowFactGatheringNextStep"), "B: fact-gathering is gated for resolved cases");
 assert(page.includes('executionPlacement === "primary"'), "C: pending execution can stay near next-step");
@@ -355,17 +402,23 @@ assert(page.includes("priorityNote"), "priority explanation sits in the Decision
 assert(!page.includes("caseItem.priorityNote?.trim() ?"), "priority note is not a header subtitle");
 assert(page.includes('title="Действия"'), "actions remain available");
 assert(page.includes("CaseDetailControls"), "actions panel is not removed");
+assert(!detailControls.includes("Завершить"), "Действия does not offer a second finish/close control");
 assert(executionPanel.includes("completeCaseExecution"), "C: pending execution can still be completed");
+assert(executionPanel.includes("CaseClosureDialog"), "C: close goes through the Decision Record dialog");
+assert(!executionPanel.includes("closeCaseAfterExecution"), "C: execution close cannot skip Decision Record creation");
+assert(page.includes("CaseDecisionRecordCard"), "closed Decision Record surface is on the workspace");
+assert(page.includes("shouldShowActiveDecisionRecord"), "old Decision Record is not shown as the current cycle");
 assert(executionPanel.includes("Выполнено"), "C: pending execution keeps the done action");
 assert(executionPanel.includes('tone?: "default" | "quiet"'), "D: execution has a quieter completed state");
 assert(executionPanel.includes("hideTitle?: boolean"), "C: execution heading can yield to Next Step");
 
 const goalIdx = page.indexOf("Цель:");
-const decisionIdx = page.indexOf("kicker}>Решение");
+const decisionIdx = page.indexOf("showPrimaryDecision && decisionSurface");
 const nextIdx = page.indexOf("Следующий шаг");
 const extraIdx = page.indexOf("Дополнительно");
 const dialogueIdx = page.indexOf("CaseDialogueLauncher");
-assert(decisionIdx < goalIdx, "visual order: Решение kicker before compact Цель");
+assert(decisionIdx > -1, "visual order: Decision surface is gated");
+assert(page.includes("showPrimaryDecision && decisionSurface"), "visual order: Decision surface is gated");
 assert(goalIdx < nextIdx, "visual order: Decision surface before Следующий шаг");
 assert(nextIdx < extraIdx, "visual order: next-step before Дополнительно");
 assert(dialogueIdx < extraIdx, "visual order: dialogue before secondary controls");

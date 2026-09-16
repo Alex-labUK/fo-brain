@@ -2,15 +2,16 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
+import { CaseClosureDialog } from "@/app/cases/[id]/CaseClosureDialog";
 import {
   clearCaseExecution,
-  closeCaseAfterExecution,
   completeCaseExecution,
   updateCaseExecution,
 } from "@/app/cases/[id]/actions";
 import { formatLifecycleSince } from "@/lib/case-lifecycle";
 import { executionStatusLabels, type ExecutionStatus } from "@/lib/case-execution";
 import { workspaceType } from "@/app/cases/[id]/workspace-ui";
+import type { ClosurePreview } from "@/lib/decision-record";
 
 type CaseExecutionPanelProps = {
   caseId: string;
@@ -23,6 +24,7 @@ type CaseExecutionPanelProps = {
   showClosePrompt: boolean;
   tone?: "default" | "quiet";
   hideTitle?: boolean;
+  closurePreview: ClosurePreview;
 };
 
 export function CaseExecutionPanel({
@@ -36,6 +38,7 @@ export function CaseExecutionPanel({
   showClosePrompt,
   tone = "default",
   hideTitle = false,
+  closurePreview,
 }: CaseExecutionPanelProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -44,6 +47,7 @@ export function CaseExecutionPanel({
   const [step, setStep] = useState(executionStep);
   const [owner, setOwner] = useState(executionOwner ?? "");
   const [closeDismissed, setCloseDismissed] = useState(false);
+  const [closing, setClosing] = useState(false);
 
   useEffect(() => {
     setStep(executionStep);
@@ -128,7 +132,7 @@ export function CaseExecutionPanel({
             <button
               type="button"
               disabled={isPending}
-              onClick={() => run(() => closeCaseAfterExecution(caseId))}
+              onClick={() => setClosing(true)}
               className="rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-60"
             >
               Закрыть кейс
@@ -203,6 +207,13 @@ export function CaseExecutionPanel({
         )}
       </div>
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+      <CaseClosureDialog
+        caseId={caseId}
+        preview={closurePreview}
+        open={closing}
+        onClose={() => setClosing(false)}
+        onClosed={() => router.refresh()}
+      />
     </section>
   );
 }

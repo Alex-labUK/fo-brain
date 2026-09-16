@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import type { CaseBlockerType, CaseLifecycleState } from "@prisma/client";
+import { CaseClosureDialog } from "@/app/cases/[id]/CaseClosureDialog";
 import { updateCaseLifecycle } from "@/app/cases/[id]/actions";
 import {
   allowsBlockerNote,
@@ -13,6 +14,7 @@ import {
   lifecycleLabel,
   lifecycleStates,
 } from "@/lib/case-lifecycle";
+import type { ClosurePreview } from "@/lib/decision-record";
 
 type CaseLifecyclePanelProps = {
   caseId: string;
@@ -22,6 +24,7 @@ type CaseLifecyclePanelProps = {
   lifecycleUpdatedAt: string;
   renderedAt: string;
   bare?: boolean;
+  closurePreview: ClosurePreview;
 };
 
 export function CaseLifecyclePanel({
@@ -32,12 +35,14 @@ export function CaseLifecyclePanel({
   lifecycleUpdatedAt,
   renderedAt,
   bare = false,
+  closurePreview,
 }: CaseLifecyclePanelProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [selectedState, setSelectedState] = useState(lifecycleState);
   const [note, setNote] = useState(blockerNote ?? "");
+  const [closing, setClosing] = useState(false);
 
   useEffect(() => {
     setSelectedState(lifecycleState);
@@ -49,6 +54,10 @@ export function CaseLifecyclePanel({
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     const trimmedNote = note.trim();
+    if (selectedState === "closed" && lifecycleState !== "closed") {
+      setClosing(true);
+      return;
+    }
     setError(null);
     startTransition(async () => {
       try {
@@ -121,6 +130,16 @@ export function CaseLifecyclePanel({
         </button>
         {error && <p className="text-sm text-red-600">{error}</p>}
       </form>
+      <CaseClosureDialog
+        caseId={caseId}
+        preview={closurePreview}
+        open={closing}
+        onClose={() => {
+          setClosing(false);
+          setSelectedState(lifecycleState);
+        }}
+        onClosed={() => router.refresh()}
+      />
     </section>
   );
 }

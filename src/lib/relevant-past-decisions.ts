@@ -1,3 +1,4 @@
+import type { PrecedentContextRef } from "@/core/orchestration/analysis-core";
 import { parseDecisionCycleHistory } from "@/lib/decision-cycle";
 import {
   formatDecisionRecordClosedAt,
@@ -64,6 +65,7 @@ const FIELD_WEIGHTS = {
   resolvingEvidence: 1,
   factualOutcome: 0.8,
   caseMemory: 0.7,
+  facts: 1.2,
 } as const;
 
 export type HistoricalCaseSource = {
@@ -78,6 +80,7 @@ export type HistoricalDecisionMemory = {
   sourceCaseTitle: string;
   cycleNumber: number;
   closedAt: string;
+  analysisKey?: string;
   decisionStatusAtClose: DecisionRecord["decisionStatusAtClose"];
   outcome: string;
   decision: string;
@@ -93,6 +96,8 @@ export type CurrentDecisionQuery = {
   decision?: string | null;
   determiningFact?: string | null;
   caseMemory?: string | null;
+  /** Optional current-case facts; used for analysis matching, not display ranking. */
+  facts?: string | null;
 };
 
 export type RelevantPastDecision = {
@@ -100,9 +105,12 @@ export type RelevantPastDecision = {
   sourceCaseTitle: string;
   cycleNumber: number;
   closedAt: string;
+  analysisKey?: string;
   decisionStatusAtClose: DecisionRecord["decisionStatusAtClose"];
+  outcome?: string;
   decision: string;
   determiningFact?: string;
+  resolvingEvidence?: string;
   factualOutcome?: string;
   relevanceScore: number;
 };
@@ -171,6 +179,7 @@ export function currentDecisionQueryFromWorkspace(input: {
   decision?: string | null;
   determiningFact?: string | null;
   caseMemory?: string | null;
+  facts?: string | null;
 }): CurrentDecisionQuery {
   return {
     caseId: input.caseId,
@@ -179,6 +188,7 @@ export function currentDecisionQueryFromWorkspace(input: {
     decision: compact(input.decision) || null,
     determiningFact: usableDeterminingFact(input.determiningFact),
     caseMemory: cappedMemory(input.caseMemory) || null,
+    facts: compact(input.facts) || null,
   };
 }
 
@@ -189,6 +199,7 @@ function currentCoreBag(current: CurrentDecisionQuery): WeightedBag {
     { text: query.decision, weight: FIELD_WEIGHTS.decision },
     { text: query.outcome, weight: FIELD_WEIGHTS.outcome },
     { text: query.title, weight: FIELD_WEIGHTS.title },
+    { text: query.facts, weight: FIELD_WEIGHTS.facts },
   ]);
 }
 
@@ -273,6 +284,7 @@ function fromParsedRecord(
     outcome: parsed.outcome,
     decision: parsed.decision,
   };
+  if (parsed.analysisKey) memory.analysisKey = parsed.analysisKey;
   if (parsed.determiningFact) memory.determiningFact = parsed.determiningFact;
   if (parsed.resolvingEvidence) memory.resolvingEvidence = parsed.resolvingEvidence;
   if (parsed.factualOutcome) memory.factualOutcome = parsed.factualOutcome;
@@ -344,7 +356,10 @@ function toPresentation(record: HistoricalDecisionMemory, score: number): Releva
     decision: record.decision,
     relevanceScore: score,
   };
+  if (record.analysisKey) item.analysisKey = record.analysisKey;
+  if (record.outcome) item.outcome = record.outcome;
   if (record.determiningFact) item.determiningFact = record.determiningFact;
+  if (record.resolvingEvidence) item.resolvingEvidence = record.resolvingEvidence;
   if (record.factualOutcome) item.factualOutcome = record.factualOutcome;
   return item;
 }
@@ -355,6 +370,7 @@ export function findRelevantPastDecisions(input: {
   maxResults?: number;
   minScore?: number;
   minSharedTokens?: number;
+  resolvedOnly?: boolean;
 }): RelevantPastDecision[] {
   const maxResults = input.maxResults ?? RELEVANT_PAST_DECISIONS_MAX;
   const minScore = input.minScore ?? RELEVANT_PAST_DECISIONS_MIN_SCORE;
@@ -365,6 +381,7 @@ export function findRelevantPastDecisions(input: {
   const ranked: RelevantPastDecision[] = [];
 
   for (const record of records) {
+    if (input.resolvedOnly && record.decisionStatusAtClose !== "resolved") continue;
     const debug = scoreRelevantPastDecision(input.current, record);
     if (debug.score < minScore) continue;
     if (debug.sharedTokens.length < minSharedTokens) continue;
@@ -390,6 +407,109 @@ export function findRelevantPastDecisions(input: {
     if (unique.length >= maxResults) break;
   }
   return unique;
+}
+
+function cardKey(item: { sourceCaseId: string; cycleNumber: number }): string {
+  return `${item.sourceCaseId}:${item.cycleNumber}`;
+}
+
+/** Resolves current-analysis precedent refs to persisted Decision Records. Skips missing/malformed refs. */
+export function resolveSuppliedHistoricalDecisions(input: {
+  current?: CurrentDecisionQuery;
+  historical: HistoricalCaseSource[];
+  providedRefs?: PrecedentContextRef[] | null;
+}): RelevantPastDecision[] {
+  const refs = input.providedRefs;
+  if (!refs || refs.length === 0) return [];
+
+  try {
+    const records = extractHistoricalDecisionRecords(input.historical, input.current?.caseId);
+    const cards: RelevantPastDecision[] = [];
+    const seenKeys = new Set<string>();
+    const seenCases = new Set<string>();
+
+    for (const ref of refs) {
+      const caseId = typeof ref?.caseId === "string" ? ref.caseId.trim() : "";
+      const cycleNumber = typeof ref?.cycleNumber === "number" ? ref.cycleNumber : NaN;
+      if (!caseId || !Number.isInteger(cycleNumber) || cycleNumber < 1) continue;
+      const key = `${caseId}:${cycleNumber}`;
+      if (seenKeys.has(key) || seenCases.has(caseId)) continue;
+
+      const record = records.find((item) => item.sourceCaseId === caseId && item.cycleNumber === cycleNumber);
+      if (!record) continue;
+
+      seenKeys.add(key);
+      seenCases.add(caseId);
+      const score = input.current ? scoreRelevantPastDecision(input.current, record).score : 0;
+      cards.push(toPresentation(record, score));
+    }
+    return cards;
+  } catch (error) {
+    console.error("[precedent] supplied ref resolve failed:", error);
+    return [];
+  }
+}
+
+/** Supplied current-analysis records first, then ordinary display ranking. One card per source case. */
+export function mergeVisibleHistoricalDecisions(input: {
+  supplied: RelevantPastDecision[];
+  ranked: RelevantPastDecision[];
+  maxResults?: number;
+}): RelevantPastDecision[] {
+  const maxResults = input.maxResults ?? RELEVANT_PAST_DECISIONS_MAX;
+  const visible: RelevantPastDecision[] = [];
+  const seenKeys = new Set<string>();
+  const seenCases = new Set<string>();
+
+  const push = (item: RelevantPastDecision): void => {
+    if (visible.length >= maxResults) return;
+    const key = cardKey(item);
+    if (seenKeys.has(key) || seenCases.has(item.sourceCaseId)) return;
+    seenKeys.add(key);
+    seenCases.add(item.sourceCaseId);
+    visible.push(item);
+  };
+
+  for (const item of input.supplied) push(item);
+  for (const item of input.ranked) push(item);
+  return visible;
+}
+
+/** Visible Reasoning Context historical cards: current supplied precedents first, then display ranking. */
+export function visibleHistoricalDecisionCards(input: {
+  current: CurrentDecisionQuery;
+  historical: HistoricalCaseSource[];
+  providedRefs?: PrecedentContextRef[] | null;
+}): RelevantPastDecision[] {
+  return mergeVisibleHistoricalDecisions({
+    supplied: resolveSuppliedHistoricalDecisions(input),
+    ranked: findRelevantPastDecisions({
+      current: input.current,
+      historical: input.historical,
+    }),
+  });
+}
+
+export const PRECEDENT_INPUT_MIN_SCORE = 0.2;
+export const PRECEDENT_INPUT_MAX = 2;
+
+export function selectPrecedentsForAnalysis(input: {
+  current: CurrentDecisionQuery;
+  historical: HistoricalCaseSource[];
+}): RelevantPastDecision[] {
+  try {
+    if (currentCoreBag(input.current).size < 3) return [];
+    return findRelevantPastDecisions({
+      current: input.current,
+      historical: input.historical,
+      maxResults: PRECEDENT_INPUT_MAX,
+      minScore: PRECEDENT_INPUT_MIN_SCORE,
+      resolvedOnly: true,
+    });
+  } catch (error) {
+    console.error("[precedent] selection failed, continuing without precedent:", error);
+    return [];
+  }
 }
 
 export function shouldShowRelevantPastDecisions(input: {

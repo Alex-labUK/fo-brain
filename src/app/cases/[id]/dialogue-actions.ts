@@ -50,6 +50,7 @@ export async function postCaseMessage(
     where: { id: caseId },
     select: {
       id: true,
+      title: true,
       facts: true,
       caseMemory: true,
       analysisResult: true,
@@ -79,6 +80,7 @@ export async function postCaseMessage(
   const currentSections = Array.isArray((caseItem.analysisResult as { sections?: unknown } | null)?.sections)
     ? (caseItem.analysisResult as { sections: { title: string; content?: string }[] }).sections
     : [];
+  const currentOutcome = currentSections.find((section) => section.title === SECTION_TITLES[0])?.content;
   const currentFork = currentSections.find((section) => section.title === SECTION_TITLES[1])?.content;
   const currentDeterminingFact = currentSections.find((section) => section.title === SECTION_TITLES[2])?.content;
   const currentDecisionStatus = parseDecisionStatus(caseItem.analysisResult);
@@ -111,6 +113,9 @@ export async function postCaseMessage(
     currentFork,
     currentDeterminingFact,
     currentDecisionStatus,
+    currentOutcome,
+    caseId,
+    title: caseItem.title,
     decisionCycleHistory: caseItem.decisionCycleHistory,
   });
 

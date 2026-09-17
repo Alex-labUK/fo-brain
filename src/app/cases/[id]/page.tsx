@@ -63,7 +63,7 @@ import {
 } from "@/lib/next-step-result-flow";
 import {
   currentDecisionQueryFromWorkspace,
-  findRelevantPastDecisions,
+  visibleHistoricalDecisionCards,
 } from "@/lib/relevant-past-decisions";
 import { findRelevantPrinciples } from "@/lib/relevant-principles";
 import { shouldShowReasoningContext } from "@/lib/reasoning-context";
@@ -228,7 +228,7 @@ export default async function CaseDetailPage({ params }: PageProps) {
     caseMemory: caseItem.caseMemory,
   });
   const relevantPastDecisions = showReasoningContext
-    ? findRelevantPastDecisions({
+    ? visibleHistoricalDecisionCards({
         current: reasoningQuery,
         historical: await prisma.case.findMany({
           where: { id: { not: caseItem.id } },
@@ -239,6 +239,7 @@ export default async function CaseDetailPage({ params }: PageProps) {
             decisionCycleHistory: true,
           },
         }),
+        providedRefs: storedAnalysis?.precedentContextRefs,
       })
     : [];
   const relevantPrinciples = showReasoningContext
@@ -411,7 +412,7 @@ export default async function CaseDetailPage({ params }: PageProps) {
       </CaseDialogueLauncher>
 
       {showReasoningContext ? (
-        <ReasoningContext principles={relevantPrinciples} pastDecisions={relevantPastDecisions} />
+        <ReasoningContext principles={relevantPrinciples} pastDecisions={relevantPastDecisions} providedRefs={storedAnalysis?.precedentContextRefs} />
       ) : null}
 
       <section className="mt-14 border-t border-zinc-200 pt-8">

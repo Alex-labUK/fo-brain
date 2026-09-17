@@ -334,7 +334,7 @@ for (const relative of promptFiles) {
 const page = readFileSync(path.join(root, "src/app/cases/[id]/page.tsx"), "utf8");
 const ui = readFileSync(path.join(root, "src/app/cases/[id]/RelevantPastDecisions.tsx"), "utf8");
 const contextUi = readFileSync(path.join(root, "src/app/cases/[id]/ReasoningContext.tsx"), "utf8");
-assert(page.includes("findRelevantPastDecisions"), "retrieval is delegated to the helper");
+assert(page.includes("visibleHistoricalDecisionCards"), "retrieval is delegated to the helper");
 assert(!page.includes("tokenizeRelevanceText"), "matching logic stays out of page.tsx");
 assert(contextUi.includes("RelevantPastDecisions"), "historical cards live inside Reasoning Context");
 assert(

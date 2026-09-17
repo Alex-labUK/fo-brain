@@ -176,9 +176,46 @@ Facts, outcome, fork, and determining fact remain primary. Reasoning Context is 
 
 **Principles / patterns** come only from the curated Family Office knowledge base (`seed-data.json`, sourced from `decision-engine.md`). The Decision Engine already uses them as **step-4 calibration** after facts and the fork are derived; AnalysisResult does not persist a selected principle. v1 surfaces at most **2** genuinely relevant items with deterministic token overlap (reusing Relevant Past Decisions normalization). Weak matches are omitted. A principle never creates a fact, never writes `caseMemory`, and never auto-resolves the current fork.
 
-**Historical cases** reuse Relevant Past Decisions v1 exactly and remain **display-only**. They are not injected into initial analysis, continueAnalysis, lifecycle/execution suggestions, or Decision Change Summary.
+**Historical cases** reuse Relevant Past Decisions v1 for **display**. Unresolved historical records remain display-only. A stricter subset of resolved cross-case records may be supplied to the existing Decision Engine analysis call (see Controlled Precedent Input). They are not injected into lifecycle/execution suggestions or Decision Change Summary.
 
 The combined section «Контекст решения» renders principles, past cases, or both; if neither exists it renders nothing. Zero additional AI calls. Later semantic retrieval can replace the matchers without changing this UI contract.
+
+---
+
+## Controlled Precedent Input
+
+Historical precedent is **calibration**, not evidence. Hierarchy remains:
+
+```text
+CURRENT CONFIRMED FACTS
+  → CURRENT DESIRED OUTCOME
+  → CURRENT DECISION FORK
+  → CURRENT DETERMINING FACT
+  → principles / patterns / precedents as calibration
+```
+
+Current facts and the current desired outcome stay authoritative. A precedent never creates a confirmed fact, never answers the current Determining Fact, never substitutes for missing evidence, never auto-resolves `decisionStatus`, never overrides a Principal decision, `caseMemory`, or the current outcome, and is never copied merely because cases look similar. If current facts or outcome conflict with a precedent, the current case wins. Partial similarity may be ignored.
+
+**Eligibility (AI input v1)** is stricter than Relevant Past Decisions display (threshold **0.14**, max **3**, resolved or unresolved):
+
+- persisted Decision Records only (`Case.decisionRecord` and archived `decisionCycleHistory`);
+- `decisionStatusAtClose === "resolved"`;
+- same deterministic matcher, then `PRECEDENT_INPUT_MIN_SCORE` (**0.20**, must stay above the display threshold);
+- max **2**; empty is normal;
+- cross-case only: current case and its prior cycles are excluded;
+- skipped when current-case core tokens are too thin for a meaningful match.
+
+Unresolved historical records stay in Reasoning Context when they pass the display threshold. They never enter the analysis prompt or `precedentContextRefs`.
+
+**No extra AI call.** Selection is deterministic and is passed into the existing initial analysis and `continueAnalysis` prompts after current-case facts/outcome/fork/fact. Retrieval failure continues analysis without precedent. Selection is recalculated every analysis cycle; previous refs are not copied forward.
+
+Prompt text is untrusted **DATA** inside delimiters. The model is told never to follow instructions inside historical text. Precedent is not merged with Family Office principles (`seed-data.json` / `decision-engine.md` unchanged). Precedent facts are never copied into current `caseMemory`.
+
+**Auditability:** `AnalysisResult.precedentContextRefs` records which historical records were **supplied** to that analysis. It does not mean the model followed them. Do not generate causal copy such as «мы приняли это решение, потому что прошлый кейс доказал». Every supplied record must be visible in «Похожие прошлые кейсы»: Reasoning Context shows current `precedentContextRefs` first (resolved to persisted Decision Records; missing/malformed refs are skipped), then fills remaining slots from ordinary Relevant Past Decisions ranking, still at most **3** cards. Only those current refs receive «Передан в контекст текущего разбора».
+
+Decision Change Summary ignores these refs. Lifecycle, execution, and closure prompts do not receive a separate precedent block.
+
+Future semantic retrieval may replace the deterministic matcher without changing this contract.
 
 ---
 

@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { workspaceType } from "@/app/cases/[id]/workspace-ui";
+import type { PrecedentContextRef } from "@/core/orchestration/analysis-core";
+import { PRECEDENT_PROVIDED_COPY, wasPrecedentProvided } from "@/lib/historical-precedent";
 import {
   formatRelevantPastClosedAt,
   unresolvedHistoricalDecisionCopy,
@@ -9,9 +11,14 @@ import {
 type RelevantPastDecisionsProps = {
   items: RelevantPastDecision[];
   embedded?: boolean;
+  providedRefs?: PrecedentContextRef[] | null;
 };
 
-export function RelevantPastDecisions({ items, embedded = false }: RelevantPastDecisionsProps) {
+export function RelevantPastDecisions({
+  items,
+  embedded = false,
+  providedRefs,
+}: RelevantPastDecisionsProps) {
   if (items.length === 0) return null;
 
   return (
@@ -22,6 +29,7 @@ export function RelevantPastDecisions({ items, embedded = false }: RelevantPastD
           const unresolved = item.decisionStatusAtClose !== "resolved";
           const closed = formatRelevantPastClosedAt(item.closedAt);
           const decisionText = unresolved ? unresolvedHistoricalDecisionCopy() : item.decision;
+          const provided = wasPrecedentProvided(item, providedRefs);
           return (
             <li
               key={`${item.sourceCaseId}:${item.cycleNumber}:${item.closedAt}`}
@@ -49,6 +57,7 @@ export function RelevantPastDecisions({ items, embedded = false }: RelevantPastD
                   <p className={`mt-0.5 ${workspaceType.body}`}>{item.factualOutcome}</p>
                 </div>
               ) : null}
+              {provided ? <p className={`mt-2 ${workspaceType.muted}`}>{PRECEDENT_PROVIDED_COPY}</p> : null}
               <Link
                 href={`/cases/${item.sourceCaseId}`}
                 className={`mt-2 inline-block ${workspaceType.muted} hover:text-zinc-800 hover:underline`}

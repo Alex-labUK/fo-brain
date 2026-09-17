@@ -246,7 +246,7 @@ const contextUi = readFileSync(path.join(root, "src/app/cases/[id]/ReasoningCont
 const pastUi = readFileSync(path.join(root, "src/app/cases/[id]/RelevantPastDecisions.tsx"), "utf8");
 assert(page.includes("ReasoningContext"), "workspace renders one Reasoning Context section");
 assert(page.includes("findRelevantPrinciples"), "principle retrieval is delegated");
-assert(page.includes("findRelevantPastDecisions"), "historical retrieval is reused");
+assert(page.includes("visibleHistoricalDecisionCards"), "historical retrieval is reused");
 assert(!page.includes("tokenizeRelevanceText"), "matching stays out of page.tsx");
 assert(page.includes("shouldShowReasoningContext"), "visibility is helper-gated");
 assert(

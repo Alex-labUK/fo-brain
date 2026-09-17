@@ -2,11 +2,33 @@
 
 import type { AnalysisPriority } from "@/lib/priority";
 
+export type PrecedentContextRef = {
+  caseId: string;
+  cycleNumber: number;
+  analysisKey?: string;
+};
+
+export type HistoricalPrecedentRecord = {
+  sourceCaseId: string;
+  sourceCaseTitle: string;
+  cycleNumber: number;
+  closedAt: string;
+  outcome: string;
+  decision: string;
+  determiningFact?: string;
+  resolvingEvidence?: string;
+  factualOutcome?: string;
+  analysisKey?: string;
+};
+
 export type AnalysisInput = {
   whatHappened: string;
   desiredOutcome?: string;
   /** Optional archived cycles; only the most recent completed cycle is sent to the model. */
   decisionCycleHistory?: unknown;
+  caseId?: string;
+  title?: string;
+  historicalPrecedents?: HistoricalPrecedentRecord[];
 };
 
 export type RoleAssignment = {
@@ -31,6 +53,8 @@ export type AnalysisResult = {
   reply?: string;
   /** Whether a genuine decision fork still needs a determining fact. */
   decisionStatus?: DecisionStatus;
+  /** Historical records supplied to this analysis. Not proof the model followed them. */
+  precedentContextRefs?: PrecedentContextRef[];
 };
 
 export const RESOLVED_DETERMINING_FACT =
@@ -63,8 +87,12 @@ export type ContinueAnalysisInput = {
   currentFork?: string;
   currentDeterminingFact?: string;
   currentDecisionStatus?: DecisionStatus;
+  currentOutcome?: string;
+  caseId?: string;
+  title?: string;
   /** Optional archived cycles; only the most recent completed cycle is sent to the model. */
   decisionCycleHistory?: unknown;
+  historicalPrecedents?: HistoricalPrecedentRecord[];
 };
 
 export const MAX_CASE_MEMORY_BULLETS = 15;
@@ -426,6 +454,24 @@ export function parseDecisionStatus(raw: unknown): DecisionStatus {
   return raw.decisionStatus === "resolved" ? "resolved" : "unresolved";
 }
 
+export function parsePrecedentContextRefs(raw: unknown): PrecedentContextRef[] | undefined {
+  const list = isRecord(raw) ? raw.precedentContextRefs : raw;
+  if (!Array.isArray(list)) return undefined;
+  const refs: PrecedentContextRef[] = [];
+  for (const item of list) {
+    if (!isRecord(item)) continue;
+    const caseId = typeof item.caseId === "string" ? item.caseId.trim() : "";
+    const cycleNumber =
+      typeof item.cycleNumber === "number" && Number.isInteger(item.cycleNumber) ? item.cycleNumber : NaN;
+    if (!caseId || !Number.isInteger(cycleNumber) || cycleNumber < 1) continue;
+    const ref: PrecedentContextRef = { caseId, cycleNumber };
+    const analysisKey = typeof item.analysisKey === "string" ? item.analysisKey.trim() : "";
+    if (analysisKey) ref.analysisKey = analysisKey;
+    refs.push(ref);
+  }
+  return refs.length > 0 ? refs : undefined;
+}
+
 export function isResolvedAnalysis(result: Pick<AnalysisResult, "decisionStatus">): boolean {
   return result.decisionStatus === "resolved";
 }
@@ -509,6 +555,11 @@ export function normalizeAnalysisResult(raw: unknown): AnalysisResult {
 
   if (reply) {
     result.reply = reply;
+  }
+
+  const precedentContextRefs = parsePrecedentContextRefs(raw);
+  if (precedentContextRefs) {
+    result.precedentContextRefs = precedentContextRefs;
   }
 
   if (containsForbiddenPhrase(collectAnalysisText(result))) {

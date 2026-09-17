@@ -1,5 +1,6 @@
 import { RelevantPastDecisions } from "@/app/cases/[id]/RelevantPastDecisions";
 import { workspaceType } from "@/app/cases/[id]/workspace-ui";
+import type { PrecedentContextRef } from "@/core/orchestration/analysis-core";
 import {
   hasReasoningContextContent,
   REASONING_CONTEXT_ROLE_LINE,
@@ -10,9 +11,14 @@ import type { RelevantPrinciple } from "@/lib/relevant-principles";
 type ReasoningContextProps = {
   principles: RelevantPrinciple[];
   pastDecisions: RelevantPastDecision[];
+  providedRefs?: PrecedentContextRef[] | null;
 };
 
-export function ReasoningContext({ principles, pastDecisions }: ReasoningContextProps) {
+export function ReasoningContext({
+  principles,
+  pastDecisions,
+  providedRefs,
+}: ReasoningContextProps) {
   if (!hasReasoningContextContent({ principles, pastDecisions })) return null;
 
   return (
@@ -33,7 +39,7 @@ export function ReasoningContext({ principles, pastDecisions }: ReasoningContext
         </ul>
       ) : null}
 
-      <RelevantPastDecisions items={pastDecisions} embedded />
+      <RelevantPastDecisions items={pastDecisions} embedded providedRefs={providedRefs} />
     </section>
   );
 }

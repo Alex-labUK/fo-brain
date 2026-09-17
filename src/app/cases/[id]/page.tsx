@@ -10,7 +10,7 @@ import { CaseExecutionSuggestionCard } from "@/app/cases/[id]/CaseExecutionSugge
 import { CaseLifecyclePanel } from "@/app/cases/[id]/CaseLifecyclePanel";
 import { CaseLifecycleSuggestionCard } from "@/app/cases/[id]/CaseLifecycleSuggestionCard";
 import { CaseReopenSuggestionCard } from "@/app/cases/[id]/CaseReopenSuggestionCard";
-import { RelevantPastDecisions } from "@/app/cases/[id]/RelevantPastDecisions";
+import { ReasoningContext } from "@/app/cases/[id]/ReasoningContext";
 import { WorkspaceDetails } from "@/app/cases/[id]/WorkspaceDetails";
 import {
   workspaceDecisionSurfaceClass,
@@ -64,8 +64,9 @@ import {
 import {
   currentDecisionQueryFromWorkspace,
   findRelevantPastDecisions,
-  shouldShowRelevantPastDecisions,
 } from "@/lib/relevant-past-decisions";
+import { findRelevantPrinciples } from "@/lib/relevant-principles";
+import { shouldShowReasoningContext } from "@/lib/reasoning-context";
 
 export const dynamic = "force-dynamic";
 
@@ -172,7 +173,7 @@ export default async function CaseDetailPage({ params }: PageProps) {
   const showActiveNextStep = shouldShowActiveWorkspaceNextStep({
     lifecycleState: caseItem.lifecycleState,
   });
-  const showRelevantPast = shouldShowRelevantPastDecisions({
+  const showReasoningContext = shouldShowReasoningContext({
     lifecycleState: caseItem.lifecycleState,
     reopenSuggestionVisible: Boolean(reopenSuggestion),
   });
@@ -218,16 +219,17 @@ export default async function CaseDetailPage({ params }: PageProps) {
     executionPlacement,
     executionStatus: storedExecution.executionStatus,
   });
-  const relevantPastDecisions = showRelevantPast
+  const reasoningQuery = currentDecisionQueryFromWorkspace({
+    caseId: caseItem.id,
+    title: caseItem.title,
+    outcome: outcomeText,
+    decision: decisionText,
+    determiningFact,
+    caseMemory: caseItem.caseMemory,
+  });
+  const relevantPastDecisions = showReasoningContext
     ? findRelevantPastDecisions({
-        current: currentDecisionQueryFromWorkspace({
-          caseId: caseItem.id,
-          title: caseItem.title,
-          outcome: outcomeText,
-          decision: decisionText,
-          determiningFact,
-          caseMemory: caseItem.caseMemory,
-        }),
+        current: reasoningQuery,
         historical: await prisma.case.findMany({
           where: { id: { not: caseItem.id } },
           select: {
@@ -238,6 +240,9 @@ export default async function CaseDetailPage({ params }: PageProps) {
           },
         }),
       })
+    : [];
+  const relevantPrinciples = showReasoningContext
+    ? findRelevantPrinciples({ current: reasoningQuery })
     : [];
 
   const executionPanel =
@@ -405,7 +410,9 @@ export default async function CaseDetailPage({ params }: PageProps) {
 
       </CaseDialogueLauncher>
 
-      {showRelevantPast ? <RelevantPastDecisions items={relevantPastDecisions} /> : null}
+      {showReasoningContext ? (
+        <ReasoningContext principles={relevantPrinciples} pastDecisions={relevantPastDecisions} />
+      ) : null}
 
       <section className="mt-14 border-t border-zinc-200 pt-8">
         <h2 className={workspaceType.section}>Дополнительно</h2>

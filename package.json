@@ -28,7 +28,8 @@
     "test:next-step-result": "tsx src/lib/next-step-result-flow.test.ts",
     "test:decision-record": "tsx src/lib/decision-record.test.ts",
     "test:relevant-past": "tsx src/lib/relevant-past-decisions.test.ts",
-    "test": "npm run test:analysis && npm run test:proposals && npm run test:execution && npm run test:reopen && npm run test:dashboard && npm run test:intake && npm run test:workspace && npm run test:change-summary && npm run test:next-step-result && npm run test:decision-record && npm run test:relevant-past",
+    "test:reasoning-context": "tsx src/lib/reasoning-context.test.ts",
+    "test": "npm run test:analysis && npm run test:proposals && npm run test:execution && npm run test:reopen && npm run test:dashboard && npm run test:intake && npm run test:workspace && npm run test:change-summary && npm run test:next-step-result && npm run test:decision-record && npm run test:relevant-past && npm run test:reasoning-context",
     "postinstall": "prisma generate"
   },
   "prisma": {

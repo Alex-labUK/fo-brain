@@ -333,19 +333,19 @@ for (const relative of promptFiles) {
 
 const page = readFileSync(path.join(root, "src/app/cases/[id]/page.tsx"), "utf8");
 const ui = readFileSync(path.join(root, "src/app/cases/[id]/RelevantPastDecisions.tsx"), "utf8");
-assert(page.includes("RelevantPastDecisions"), "workspace can render relevant past decisions");
-assert(page.includes("shouldShowRelevantPastDecisions"), "visibility is helper-gated");
+const contextUi = readFileSync(path.join(root, "src/app/cases/[id]/ReasoningContext.tsx"), "utf8");
 assert(page.includes("findRelevantPastDecisions"), "retrieval is delegated to the helper");
 assert(!page.includes("tokenizeRelevanceText"), "matching logic stays out of page.tsx");
+assert(contextUi.includes("RelevantPastDecisions"), "historical cards live inside Reasoning Context");
 assert(
-  page.indexOf("</CaseDialogueLauncher>") < page.indexOf("RelevantPastDecisions items"),
+  page.indexOf("</CaseDialogueLauncher>") < page.indexOf("ReasoningContext principles"),
   "UI sits below Decision / Next Step / FO Brain guidance",
 );
 assert(
-  page.indexOf("RelevantPastDecisions items") < page.indexOf("Дополнительно"),
+  page.indexOf("ReasoningContext principles") < page.indexOf("Дополнительно"),
   "UI stays above Дополнительно",
 );
-assert(page.includes("showRelevantPast ? <RelevantPastDecisions"), "K: closed workspace can hide the section");
+assert(page.includes("showReasoningContext ?"), "K: closed workspace can hide the section");
 assert(!ui.includes("relevanceScore"), "relevanceScore is not exposed in the UI");
 assert(!ui.includes("%"), "UI does not show similarity percentages");
 assert(!ui.includes("Похожих решений не найдено"), "empty state renders nothing");

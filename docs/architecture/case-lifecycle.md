@@ -170,6 +170,18 @@ Normally closed cases hide the section because their own Decision Record is alre
 
 ---
 
+## Reasoning Context
+
+Facts, outcome, fork, and determining fact remain primary. Reasoning Context is supporting institutional memory on an **active** workspace (or a closed case with a visible reopen suggestion). It sits below Decision / Next Step / FO Brain guidance and is visually weaker than those surfaces.
+
+**Principles / patterns** come only from the curated Family Office knowledge base (`seed-data.json`, sourced from `decision-engine.md`). The Decision Engine already uses them as **step-4 calibration** after facts and the fork are derived; AnalysisResult does not persist a selected principle. v1 surfaces at most **2** genuinely relevant items with deterministic token overlap (reusing Relevant Past Decisions normalization). Weak matches are omitted. A principle never creates a fact, never writes `caseMemory`, and never auto-resolves the current fork.
+
+**Historical cases** reuse Relevant Past Decisions v1 exactly and remain **display-only**. They are not injected into initial analysis, continueAnalysis, lifecycle/execution suggestions, or Decision Change Summary.
+
+The combined section «Контекст решения» renders principles, past cases, or both; if neither exists it renders nothing. Zero additional AI calls. Later semantic retrieval can replace the matchers without changing this UI contract.
+
+---
+
 ## Reopen / new decision cycle
 
 If a closed, resolved case later receives a genuine new uncertainty, the Decision Engine may set `decisionStatus` back to `unresolved`. Lifecycle stays `closed` until a human applies «возобновить кейс».

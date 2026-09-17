@@ -8,13 +8,14 @@ import {
 
 type RelevantPastDecisionsProps = {
   items: RelevantPastDecision[];
+  embedded?: boolean;
 };
 
-export function RelevantPastDecisions({ items }: RelevantPastDecisionsProps) {
+export function RelevantPastDecisions({ items, embedded = false }: RelevantPastDecisionsProps) {
   if (items.length === 0) return null;
 
   return (
-    <section className="mt-8">
+    <section className={embedded ? "mt-5" : "mt-8"}>
       <p className={workspaceType.kicker}>Похожие прошлые кейсы</p>
       <ul className="mt-3 space-y-3">
         {items.map((item) => {

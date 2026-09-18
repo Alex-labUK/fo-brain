@@ -32,7 +32,8 @@
     "test:precedent": "tsx src/lib/historical-precedent.test.ts",
     "test:decision-support": "tsx src/lib/decision-support.test.ts",
     "test:decision-challenge": "tsx src/lib/decision-challenge.test.ts",
-    "test": "npm run test:analysis && npm run test:proposals && npm run test:execution && npm run test:reopen && npm run test:dashboard && npm run test:intake && npm run test:workspace && npm run test:change-summary && npm run test:next-step-result && npm run test:decision-record && npm run test:relevant-past && npm run test:reasoning-context && npm run test:precedent && npm run test:decision-support && npm run test:decision-challenge",
+    "test:decision-authority": "tsx src/lib/decision-authority.test.ts",
+    "test": "npm run test:analysis && npm run test:proposals && npm run test:execution && npm run test:reopen && npm run test:dashboard && npm run test:intake && npm run test:workspace && npm run test:change-summary && npm run test:next-step-result && npm run test:decision-record && npm run test:relevant-past && npm run test:reasoning-context && npm run test:precedent && npm run test:decision-support && npm run test:decision-challenge && npm run test:decision-authority",
     "postinstall": "prisma generate"
   },
   "prisma": {

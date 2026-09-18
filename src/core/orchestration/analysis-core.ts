@@ -53,6 +53,23 @@ export type DecisionChallenge = {
   reviewTrigger?: string;
 };
 
+export const DECISION_AUTHORITY_OWNERS = [
+  "family_office",
+  "principal",
+  "function_owner",
+  "unclear",
+] as const;
+
+export type DecisionAuthorityOwner = (typeof DECISION_AUTHORITY_OWNERS)[number];
+
+export type DecisionAuthority = {
+  owner: DecisionAuthorityOwner;
+  escalationRequired: boolean;
+  reason?: string;
+  principalQuestion?: string;
+  functionOwner?: string;
+};
+
 export type AnalysisResult = {
   sections: AnalysisSection[];
   priority?: AnalysisPriority;
@@ -63,6 +80,8 @@ export type AnalysisResult = {
   precedentContextRefs?: PrecedentContextRef[];
   /** Resolved-only route quality check. Omitted when empty or when unresolved. */
   decisionChallenge?: DecisionChallenge;
+  /** Advisory decision-governance metadata. Omitted when insufficiently grounded. */
+  decisionAuthority?: DecisionAuthority;
 };
 
 export const RESOLVED_DETERMINING_FACT =
@@ -108,6 +127,8 @@ export const MAX_CASE_MEMORY_BULLETS = 15;
 export const MAX_ACTIONS = 4;
 
 export const MAX_DECISION_CHALLENGE_LENGTH = 240;
+export const MAX_DECISION_AUTHORITY_LENGTH = 240;
+export const MAX_FUNCTION_OWNER_LENGTH = 80;
 
 /** Legacy sixth section title — ignored when normalizing stored analyses. */
 export const LEGACY_ROUTES_SECTION_TITLE = "🔀 How the route changes afterwards";
@@ -390,6 +411,10 @@ export function collectAnalysisText(result: AnalysisResult): string {
   if (challenge?.invalidationCondition) parts.push(challenge.invalidationCondition);
   if (challenge?.openAssumption) parts.push(challenge.openAssumption);
   if (challenge?.reviewTrigger) parts.push(challenge.reviewTrigger);
+  const authority = result.decisionAuthority;
+  if (authority?.reason) parts.push(authority.reason);
+  if (authority?.principalQuestion) parts.push(authority.principalQuestion);
+  if (authority?.functionOwner) parts.push(authority.functionOwner);
   return parts.join("\n").toLowerCase();
 }
 
@@ -548,6 +573,95 @@ export function parseDecisionChallenge(
   return challenge;
 }
 
+const AUTHORITY_OWNER_ALIASES: Record<string, DecisionAuthorityOwner> = {
+  family_office: "family_office",
+  familyoffice: "family_office",
+  "family office": "family_office",
+  "family-office": "family_office",
+  fo: "family_office",
+  principal: "principal",
+  принципал: "principal",
+  function_owner: "function_owner",
+  functionowner: "function_owner",
+  "function owner": "function_owner",
+  "function-owner": "function_owner",
+  specialist: "function_owner",
+  unclear: "unclear",
+  unknown: "unclear",
+  неизвестно: "unclear",
+};
+
+function parseAuthorityOwner(value: unknown): DecisionAuthorityOwner | undefined {
+  if (typeof value !== "string") return undefined;
+  const key = value.trim().toLowerCase().replace(/\s+/g, " ");
+  return AUTHORITY_OWNER_ALIASES[key];
+}
+
+function compactAuthorityField(value: unknown, maxLength: number): string | undefined {
+  const compact = compactChallengeField(value);
+  if (!compact) return undefined;
+  return compact.length > maxLength ? compact.slice(0, maxLength).trim() : compact;
+}
+
+function compactFunctionOwner(value: unknown): string | undefined {
+  const compact = compactAuthorityField(value, MAX_FUNCTION_OWNER_LENGTH);
+  if (!compact) return undefined;
+  const role = compact.split(/[.;\n]/)[0]?.trim() ?? "";
+  if (!role || isGenericChallengeText(role)) return undefined;
+  return role.length > MAX_FUNCTION_OWNER_LENGTH ? role.slice(0, MAX_FUNCTION_OWNER_LENGTH).trim() : role;
+}
+
+function parseEscalationFlag(value: unknown): boolean {
+  if (value === true) return true;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    return normalized === "true" || normalized === "yes";
+  }
+  return false;
+}
+
+/** Parses optional decisionAuthority. Malformed or insufficient output is dropped. */
+export function parseDecisionAuthority(raw: unknown): DecisionAuthority | undefined {
+  if (!isRecord(raw)) return undefined;
+  const source = isRecord(raw.decisionAuthority) ? raw.decisionAuthority : undefined;
+  if (!source) return undefined;
+
+  const owner = parseAuthorityOwner(source.owner);
+  if (!owner || owner === "unclear") return undefined;
+
+  const reason = compactAuthorityField(source.reason, MAX_DECISION_AUTHORITY_LENGTH);
+  let principalQuestion = compactAuthorityField(source.principalQuestion, MAX_DECISION_AUTHORITY_LENGTH);
+  let functionOwner = compactFunctionOwner(source.functionOwner);
+  let escalationRequired = parseEscalationFlag(source.escalationRequired);
+
+  // One current judgment, one owner. Escalation cannot attach to FO / function_owner.
+  if (owner === "principal") {
+    if (!principalQuestion) return undefined;
+    escalationRequired = true;
+    functionOwner = undefined;
+  } else if (owner === "function_owner") {
+    if (!functionOwner) return undefined;
+    escalationRequired = false;
+    principalQuestion = undefined;
+  } else {
+    escalationRequired = false;
+    principalQuestion = undefined;
+    functionOwner = undefined;
+  }
+
+  if (escalationRequired && (owner !== "principal" || !principalQuestion)) return undefined;
+  if ((owner === "family_office" || owner === "function_owner") && escalationRequired) return undefined;
+
+  const authority: DecisionAuthority = {
+    owner,
+    escalationRequired,
+  };
+  if (reason) authority.reason = reason;
+  if (principalQuestion) authority.principalQuestion = principalQuestion;
+  if (functionOwner) authority.functionOwner = functionOwner;
+  return authority;
+}
+
 export function parsePrecedentContextRefs(raw: unknown): PrecedentContextRef[] | undefined {
   const list = isRecord(raw) ? raw.precedentContextRefs : raw;
   if (!Array.isArray(list)) return undefined;
@@ -659,6 +773,11 @@ export function normalizeAnalysisResult(raw: unknown): AnalysisResult {
   const decisionChallenge = parseDecisionChallenge(raw, decisionStatus);
   if (decisionChallenge) {
     result.decisionChallenge = decisionChallenge;
+  }
+
+  const decisionAuthority = parseDecisionAuthority(raw);
+  if (decisionAuthority) {
+    result.decisionAuthority = decisionAuthority;
   }
 
   if (containsForbiddenPhrase(collectAnalysisText(result))) {

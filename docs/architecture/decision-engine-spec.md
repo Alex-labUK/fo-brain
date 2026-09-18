@@ -1,8 +1,10 @@
 # Family Office Brain — Decision Engine Specification
 
-Version: 1.6  
+Version: 1.7  
 Status: Normative  
 Path: `docs/architecture/decision-engine-spec.md`
+
+Changelog from v1.6: Decision Authority. After current-case reasoning and Decision Challenge, the same model call may return optional compact `decisionAuthority` (who owns the judgment). Advisory only. Fact owner ≠ decision owner. Unresolved factual gaps must not prematurely escalate to Principal. The §6 authority model is unchanged.
 
 Changelog from v1.5: Decision Challenge. For resolved analyses only, the same model call may return an optional compact `decisionChallenge` object (`invalidationCondition`, `openAssumption`, `reviewTrigger`). Structured conclusions, no chain-of-thought, no extra call. The unresolved internal Route-Change Check (§4.7) remains internal and is not the rejected sixth section.
 
@@ -427,6 +429,7 @@ An analysis passes only if:
 - no causal statement is presented without evidence;
 - the internal route-change check (§4.7) was performed when unresolved, even though it is never rendered;
 - authority boundaries (§6) are respected in the Reply text — the engine must not casually recommend an action that §6 would require escalating.
+- optional `decisionAuthority` classifies who owns the current judgment without creating a workflow or rewriting the fork.
 
 ---
 

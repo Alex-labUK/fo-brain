@@ -10,6 +10,7 @@ import { CaseExecutionSuggestionCard } from "@/app/cases/[id]/CaseExecutionSugge
 import { CaseLifecyclePanel } from "@/app/cases/[id]/CaseLifecyclePanel";
 import { CaseLifecycleSuggestionCard } from "@/app/cases/[id]/CaseLifecycleSuggestionCard";
 import { CaseReopenSuggestionCard } from "@/app/cases/[id]/CaseReopenSuggestionCard";
+import { DecisionAuthorityCard } from "@/app/cases/[id]/DecisionAuthorityCard";
 import { DecisionChallenge } from "@/app/cases/[id]/DecisionChallenge";
 import { DecisionSupport } from "@/app/cases/[id]/DecisionSupport";
 import { ReasoningContext } from "@/app/cases/[id]/ReasoningContext";
@@ -69,6 +70,7 @@ import {
 } from "@/lib/relevant-past-decisions";
 import { findRelevantPrinciples } from "@/lib/relevant-principles";
 import { shouldShowReasoningContext } from "@/lib/reasoning-context";
+import { shouldShowDecisionAuthority } from "@/lib/decision-authority";
 import { shouldShowDecisionChallenge } from "@/lib/decision-challenge";
 import { deriveDecisionSupportState, shouldShowDecisionSupport } from "@/lib/decision-support";
 
@@ -203,6 +205,13 @@ export default async function CaseDetailPage({ params }: PageProps) {
       lifecycleState: caseItem.lifecycleState,
       challenge: decisionChallenge,
     });
+  const decisionAuthority = storedAnalysis?.decisionAuthority;
+  const showDecisionAuthority =
+    showPrimaryDecision &&
+    shouldShowDecisionAuthority({
+      lifecycleState: caseItem.lifecycleState,
+      authority: decisionAuthority,
+    });
   const nextStep = workspaceActionFirstNextStep(storedAnalysis);
   const showFactGathering = shouldShowFactGatheringNextStep(storedAnalysis) && showActiveNextStep;
   const executionPlacement = workspaceExecutionPlacement({
@@ -311,6 +320,7 @@ export default async function CaseDetailPage({ params }: PageProps) {
         <DecisionSupport state={supportState} determiningFactVisible={Boolean(determiningFact)} />
       ) : null}
       {showDecisionChallenge && decisionChallenge ? <DecisionChallenge challenge={decisionChallenge} /> : null}
+      {showDecisionAuthority && decisionAuthority ? <DecisionAuthorityCard authority={decisionAuthority} /> : null}
       {priorityNote && <p className={`mt-3 ${workspaceType.muted}`}>{priorityNote}</p>}
     </section>
   ) : null;

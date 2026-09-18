@@ -251,6 +251,14 @@ The same analysis call may return optional `AnalysisResult.decisionChallenge`. C
 
 ---
 
+## Decision Authority / Escalation
+
+See `docs/architecture/decision-authority.md`.
+
+**Кто принимает решение** is advisory governance metadata. Fact owner ≠ decision owner. It does not write lifecycle, create a Principal workflow, or block execution. Principal escalation is only for a real remaining value/boundary judgment, not for a still-missing determining fact.
+
+---
+
 ## Reopen / new decision cycle
 
 If a closed, resolved case later receives a genuine new uncertainty, the Decision Engine may set `decisionStatus` back to `unresolved`. Lifecycle stays `closed` until a human applies «возобновить кейс».

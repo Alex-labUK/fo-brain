@@ -354,6 +354,11 @@ assert(page.includes("showDecisionChallenge"), "Decision Challenge is gated for 
 const challengeIdx = page.indexOf("showDecisionChallenge && decisionChallenge");
 assert(supportIdx < challengeIdx, "visual order: Устойчивость решения before Проверка решения");
 assert(challengeIdx < page.indexOf("Следующий шаг"), "visual order: Проверка решения before Next Step");
+assert(page.includes("DecisionAuthorityCard"), "Decision Authority sits on the primary Decision surface");
+assert(page.includes("showDecisionAuthority"), "Decision Authority is gated for closed cases");
+const authorityIdx = page.indexOf("showDecisionAuthority && decisionAuthority");
+assert(challengeIdx < authorityIdx, "visual order: Проверка решения before Кто принимает решение");
+assert(authorityIdx < page.indexOf("Следующий шаг"), "visual order: Кто принимает решение before Next Step");
 assert(!page.includes("confidenceScore"), "Decision Support is not a confidence score");
 assert(page.includes("shouldShowFactGatheringNextStep"), "B: fact-gathering is gated for resolved cases");
 assert(page.includes('executionPlacement === "primary"'), "C: pending execution can stay near next-step");

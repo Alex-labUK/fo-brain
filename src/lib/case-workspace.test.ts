@@ -344,6 +344,12 @@ assert(page.includes("shouldShowHistoricalDecisionSurface"), "B: closed analysis
 assert(page.includes("shouldShowWorkspacePriority"), "closed cases hide active urgency unless reopened");
 assert(page.includes('title="Разбор на момент закрытия"'), "B: closed live analysis is historical");
 assert(page.includes("workspaceDeterminingFact"), "B: determining fact is gated");
+assert(page.includes("DecisionSupport"), "Decision Support sits on the primary Decision surface");
+assert(page.includes("showDecisionSupport"), "Decision Support is gated for closed cases");
+const supportIdx = page.indexOf("showDecisionSupport && supportState");
+assert(page.indexOf("Что определит решение") < supportIdx, "visual order: Determining Fact before Устойчивость решения");
+assert(supportIdx < page.indexOf("Следующий шаг"), "visual order: Устойчивость решения before Next Step");
+assert(!page.includes("confidenceScore"), "Decision Support is not a confidence score");
 assert(page.includes("shouldShowFactGatheringNextStep"), "B: fact-gathering is gated for resolved cases");
 assert(page.includes('executionPlacement === "primary"'), "C: pending execution can stay near next-step");
 assert(page.includes('tone={executionPlacement === "primary" ? "default" : "quiet"}'), "D: completed execution can be quiet");

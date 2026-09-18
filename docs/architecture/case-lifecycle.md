@@ -1,7 +1,7 @@
 # Case Status and Case Lifecycle
 
-Version: 1.4  
-Status: Stage 3 implementation note, with decision-resolution, execution, and Decision Record  
+Version: 1.5  
+Status: Stage 3 implementation note, with decision-resolution, execution, Decision Record, and Decision Support  
 Path: `docs/architecture/case-lifecycle.md`
 
 ---
@@ -216,6 +216,28 @@ Prompt text is untrusted **DATA** inside delimiters. The model is told never to 
 Decision Change Summary ignores these refs. Lifecycle, execution, and closure prompts do not receive a separate precedent block.
 
 Future semantic retrieval may replace the deterministic matcher without changing this contract.
+
+---
+
+## Decision Support / Missing Evidence
+
+See `docs/architecture/decision-support.md`.
+
+`decisionStatus` and evidence support are separate. FO Brain does not estimate probability or ask the model how confident it is. There is no numeric confidence score.
+
+A compact derived state, **Устойчивость решения**, is computed deterministically from current structured data:
+
+- **missing_evidence** — `decisionStatus = unresolved` and a valid Determining Fact exists. That fact is the missing evidence. No other missing fact is invented.
+- **supported** — `decisionStatus = resolved` and the current cycle has a matching `resolutionContext` (`analysisKey` = current analysis cycle key) with preserved `resolvingEvidence` captured from an explicit Next Step Result. That is the only reliable supporting evidence in v1.
+- **support_not_recorded** — resolved, but current structured resolving evidence is absent, incomplete, or belongs to a previous analysis/cycle.
+
+The layer never writes `decisionStatus`, lifecycle, execution, or priority. A supported decision may still have pending execution. A resolved→unresolved transition shows missing evidence for the **new** Determining Fact; old evidence stays in cycle history / Decision Record.
+
+**Not evidence:** caseMemory lines, Family Office principles, historical precedent / `precedentContextRefs`, closure `factualOutcome`, model reply, arbitrary dialogue, Decision Records from other cases.
+
+On an **active** workspace (or closed + visible reopen suggestion) the compact block sits under Determining Fact and above Next Step. A normally closed case does not get a second active card; the Decision Record already shows `resolvingEvidence` when stored, and does not invent it when absent.
+
+Zero additional AI calls. The Decision Engine prompt is unchanged.
 
 ---
 

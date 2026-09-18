@@ -10,6 +10,7 @@ import { CaseExecutionSuggestionCard } from "@/app/cases/[id]/CaseExecutionSugge
 import { CaseLifecyclePanel } from "@/app/cases/[id]/CaseLifecyclePanel";
 import { CaseLifecycleSuggestionCard } from "@/app/cases/[id]/CaseLifecycleSuggestionCard";
 import { CaseReopenSuggestionCard } from "@/app/cases/[id]/CaseReopenSuggestionCard";
+import { DecisionSupport } from "@/app/cases/[id]/DecisionSupport";
 import { ReasoningContext } from "@/app/cases/[id]/ReasoningContext";
 import { WorkspaceDetails } from "@/app/cases/[id]/WorkspaceDetails";
 import {
@@ -67,6 +68,7 @@ import {
 } from "@/lib/relevant-past-decisions";
 import { findRelevantPrinciples } from "@/lib/relevant-principles";
 import { shouldShowReasoningContext } from "@/lib/reasoning-context";
+import { deriveDecisionSupportState, shouldShowDecisionSupport } from "@/lib/decision-support";
 
 export const dynamic = "force-dynamic";
 
@@ -181,6 +183,17 @@ export default async function CaseDetailPage({ params }: PageProps) {
   const outcomeText = workspaceOutcome(storedAnalysis) || caseItem.outcome?.statement?.trim() || null;
   const decisionText = workspaceDecision(storedAnalysis) || (!storedAnalysis ? caseItem.recordedResult : null);
   const determiningFact = workspaceDeterminingFact(storedAnalysis);
+  const supportState = deriveDecisionSupportState({
+    analysis: storedAnalysis,
+    resolutionContext: caseItem.resolutionContext,
+  });
+  const showDecisionSupport =
+    showPrimaryDecision &&
+    shouldShowDecisionSupport({
+      lifecycleState: caseItem.lifecycleState,
+      reopenSuggestionVisible: Boolean(reopenSuggestion),
+      state: supportState,
+    });
   const nextStep = workspaceActionFirstNextStep(storedAnalysis);
   const showFactGathering = shouldShowFactGatheringNextStep(storedAnalysis) && showActiveNextStep;
   const executionPlacement = workspaceExecutionPlacement({
@@ -285,6 +298,9 @@ export default async function CaseDetailPage({ params }: PageProps) {
           <p className={`mt-1 ${workspaceType.fact}`}>{determiningFact}</p>
         </div>
       )}
+      {showDecisionSupport && supportState ? (
+        <DecisionSupport state={supportState} determiningFactVisible={Boolean(determiningFact)} />
+      ) : null}
       {priorityNote && <p className={`mt-3 ${workspaceType.muted}`}>{priorityNote}</p>}
     </section>
   ) : null;

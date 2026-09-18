@@ -30,7 +30,8 @@
     "test:relevant-past": "tsx src/lib/relevant-past-decisions.test.ts",
     "test:reasoning-context": "tsx src/lib/reasoning-context.test.ts",
     "test:precedent": "tsx src/lib/historical-precedent.test.ts",
-    "test": "npm run test:analysis && npm run test:proposals && npm run test:execution && npm run test:reopen && npm run test:dashboard && npm run test:intake && npm run test:workspace && npm run test:change-summary && npm run test:next-step-result && npm run test:decision-record && npm run test:relevant-past && npm run test:reasoning-context && npm run test:precedent",
+    "test:decision-support": "tsx src/lib/decision-support.test.ts",
+    "test": "npm run test:analysis && npm run test:proposals && npm run test:execution && npm run test:reopen && npm run test:dashboard && npm run test:intake && npm run test:workspace && npm run test:change-summary && npm run test:next-step-result && npm run test:decision-record && npm run test:relevant-past && npm run test:reasoning-context && npm run test:precedent && npm run test:decision-support",
     "postinstall": "prisma generate"
   },
   "prisma": {

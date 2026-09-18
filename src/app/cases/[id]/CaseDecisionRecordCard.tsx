@@ -65,6 +65,9 @@ export function CaseDecisionRecordCard({ record }: CaseDecisionRecordCardProps) 
           <p className={`mt-1 ${workspaceType.body}`}>{record.resolvingEvidence}</p>
         </div>
       ) : null}
+      {!unresolved && !record.resolvingEvidence ? (
+        <p className={`mt-3 ${workspaceType.muted}`}>Основание решения зафиксировано не полностью</p>
+      ) : null}
       {executionLine ? (
         <div className="mt-3">
           <p className={workspaceType.kicker}>Выполнение</p>

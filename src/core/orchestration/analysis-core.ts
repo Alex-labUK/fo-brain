@@ -47,6 +47,12 @@ export const DECISION_STATUSES = ["unresolved", "resolved"] as const;
 
 export type DecisionStatus = (typeof DECISION_STATUSES)[number];
 
+export type DecisionChallenge = {
+  invalidationCondition?: string;
+  openAssumption?: string;
+  reviewTrigger?: string;
+};
+
 export type AnalysisResult = {
   sections: AnalysisSection[];
   priority?: AnalysisPriority;
@@ -55,6 +61,8 @@ export type AnalysisResult = {
   decisionStatus?: DecisionStatus;
   /** Historical records supplied to this analysis. Not proof the model followed them. */
   precedentContextRefs?: PrecedentContextRef[];
+  /** Resolved-only route quality check. Omitted when empty or when unresolved. */
+  decisionChallenge?: DecisionChallenge;
 };
 
 export const RESOLVED_DETERMINING_FACT =
@@ -98,6 +106,8 @@ export type ContinueAnalysisInput = {
 export const MAX_CASE_MEMORY_BULLETS = 15;
 
 export const MAX_ACTIONS = 4;
+
+export const MAX_DECISION_CHALLENGE_LENGTH = 240;
 
 /** Legacy sixth section title — ignored when normalizing stored analyses. */
 export const LEGACY_ROUTES_SECTION_TITLE = "🔀 How the route changes afterwards";
@@ -376,6 +386,10 @@ export function collectAnalysisText(result: AnalysisResult): string {
     });
     section.actions?.forEach((action) => parts.push(action));
   }
+  const challenge = result.decisionChallenge;
+  if (challenge?.invalidationCondition) parts.push(challenge.invalidationCondition);
+  if (challenge?.openAssumption) parts.push(challenge.openAssumption);
+  if (challenge?.reviewTrigger) parts.push(challenge.reviewTrigger);
   return parts.join("\n").toLowerCase();
 }
 
@@ -452,6 +466,86 @@ export function parseFactCheck(raw: unknown): FactCheck | undefined {
 export function parseDecisionStatus(raw: unknown): DecisionStatus {
   if (!isRecord(raw)) return "unresolved";
   return raw.decisionStatus === "resolved" ? "resolved" : "unresolved";
+}
+
+const EMPTY_CHALLENGE_VALUES = new Set([
+  "нет",
+  "n/a",
+  "na",
+  "не применимо",
+  "нет данных",
+  "none",
+  "-",
+  "—",
+  "неизвестно",
+  "нет основания",
+]);
+
+function challengeTextKey(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[«»“”„‟"'.,:;!?()[\]{}]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isGenericChallengeText(value: string): boolean {
+  const key = challengeTextKey(value);
+  if (!key || EMPTY_CHALLENGE_VALUES.has(key)) return true;
+  if (/ситуация изменит/.test(key)) return true;
+  if (/обстоятельства измен/.test(key)) return true;
+  if (/появятся новые факты/.test(key)) return true;
+  if (/если что.?то изменится/.test(key)) return true;
+  return false;
+}
+
+function compactChallengeField(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.replace(/\r\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  if (!trimmed) return undefined;
+  const compact =
+    trimmed.length > MAX_DECISION_CHALLENGE_LENGTH
+      ? trimmed.slice(0, MAX_DECISION_CHALLENGE_LENGTH).trim()
+      : trimmed;
+  if (!compact || isGenericChallengeText(compact)) return undefined;
+  return compact;
+}
+
+function isSameChallengeText(left: string, right: string): boolean {
+  return challengeTextKey(left) === challengeTextKey(right);
+}
+
+/** Parses optional decisionChallenge. Unresolved analyses always drop it. */
+export function parseDecisionChallenge(
+  raw: unknown,
+  decisionStatus: DecisionStatus,
+): DecisionChallenge | undefined {
+  if (decisionStatus !== "resolved") return undefined;
+  if (!isRecord(raw)) return undefined;
+  const source = isRecord(raw.decisionChallenge) ? raw.decisionChallenge : undefined;
+  if (!source) return undefined;
+
+  const invalidationCondition = compactChallengeField(source.invalidationCondition);
+  let openAssumption = compactChallengeField(source.openAssumption);
+  let reviewTrigger = compactChallengeField(source.reviewTrigger);
+
+  if (openAssumption && invalidationCondition && isSameChallengeText(openAssumption, invalidationCondition)) {
+    openAssumption = undefined;
+  }
+  if (reviewTrigger && invalidationCondition && isSameChallengeText(reviewTrigger, invalidationCondition)) {
+    reviewTrigger = undefined;
+  }
+  if (reviewTrigger && openAssumption && isSameChallengeText(reviewTrigger, openAssumption)) {
+    reviewTrigger = undefined;
+  }
+
+  if (!invalidationCondition && !openAssumption && !reviewTrigger) return undefined;
+
+  const challenge: DecisionChallenge = {};
+  if (invalidationCondition) challenge.invalidationCondition = invalidationCondition;
+  if (openAssumption) challenge.openAssumption = openAssumption;
+  if (reviewTrigger) challenge.reviewTrigger = reviewTrigger;
+  return challenge;
 }
 
 export function parsePrecedentContextRefs(raw: unknown): PrecedentContextRef[] | undefined {
@@ -560,6 +654,11 @@ export function normalizeAnalysisResult(raw: unknown): AnalysisResult {
   const precedentContextRefs = parsePrecedentContextRefs(raw);
   if (precedentContextRefs) {
     result.precedentContextRefs = precedentContextRefs;
+  }
+
+  const decisionChallenge = parseDecisionChallenge(raw, decisionStatus);
+  if (decisionChallenge) {
+    result.decisionChallenge = decisionChallenge;
   }
 
   if (containsForbiddenPhrase(collectAnalysisText(result))) {

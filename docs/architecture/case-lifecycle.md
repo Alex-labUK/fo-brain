@@ -241,6 +241,16 @@ Zero additional AI calls. The Decision Engine prompt is unchanged.
 
 ---
 
+## Decision Challenge
+
+See `docs/architecture/decision-challenge.md`.
+
+**Проверка решения** is a compact quality check on a **resolved** route. It is separate from **Устойчивость решения**. Unresolved cases do not show it. The unresolved internal route-change check stays internal.
+
+The same analysis call may return optional `AnalysisResult.decisionChallenge`. Challenge never writes decision status, lifecycle, execution, or priority. Informational only in v1.
+
+---
+
 ## Reopen / new decision cycle
 
 If a closed, resolved case later receives a genuine new uncertainty, the Decision Engine may set `decisionStatus` back to `unresolved`. Lifecycle stays `closed` until a human applies «возобновить кейс».

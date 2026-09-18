@@ -1,8 +1,10 @@
 # Family Office Brain — Decision Engine Specification
 
-Version: 1.5  
+Version: 1.6  
 Status: Normative  
 Path: `docs/architecture/decision-engine-spec.md`
+
+Changelog from v1.5: Decision Challenge. For resolved analyses only, the same model call may return an optional compact `decisionChallenge` object (`invalidationCondition`, `openAssumption`, `reviewTrigger`). Structured conclusions, no chain-of-thought, no extra call. The unresolved internal Route-Change Check (§4.7) remains internal and is not the rejected sixth section.
 
 Changelog from v1.4: Previous Decision Cycle as hard historical context. The most recent completed `decisionCycleHistory` record is injected into analysis (and fork self-repair) as structured evidence. Free-text caseMemory / Past-Fact wording remains secondary. No extra model call. Reopen/lifecycle/execution mechanics unchanged. v1.4 also added one-shot action-shaped fork self-repair (max two model calls; monotonic Past-Fact acceptance).
 
@@ -308,6 +310,12 @@ If any answer indicates inconsistency, rewrite the fork before output. Skip this
 
 Implementation: may optionally be persisted as an internal field on the stored `AnalysisResult` (e.g. `routeChange: { ifConfirmed, ifDisproved, ifUnclear }`) purely for future debugging/observability — but no current UI component may read or display it. If persisting adds meaningful complexity, it is equally acceptable to treat this purely as a prompting instruction with no stored output at all. Either is compliant; a new visible section is not.
 
+### 4.7a. Decision Challenge — resolved only, structured conclusions
+
+After current-case reasoning and calibration, a **resolved** analysis may return an optional compact `decisionChallenge` on the same JSON object: one invalidation condition, at most one remaining material assumption, and one concrete review trigger. Fields that cannot be grounded are omitted. Unresolved analyses must not include it.
+
+This is not the rejected six-section Route Change block. It does not expose chain-of-thought. It must not change `decisionStatus`. See `docs/architecture/decision-challenge.md`.
+
 ### 4.8. Stop and Wait
 
 After presenting the current cycle (decisionStatus, Outcome, Fork, Determining Fact, Fact Owner, Actions, Priority, Reply), the engine stops. When the user sends a new message in the case dialogue, the analysis cycle restarts from §4.1 with the new message as fresh evidence — this already matches how `continueAnalysisWithAI` works today.
@@ -327,9 +335,10 @@ If the new message answers the current Determining Fact **and** a genuine next f
 5. How do we obtain this fact? (fact-gathering while unresolved; execution steps or empty while resolved)
 6. Priority (urgency / stake / note → traffic-light color)
 7. Reply (short, 1–3 sentence natural-language message for the case chat)
+8. decisionChallenge (optional, resolved only — compact invalidation / assumption / review trigger; omitted when empty or unresolved)
 ```
 
-This is the real, shipped contract — 5 analysis sections plus Priority, Reply, and an additive `decisionStatus` on `AnalysisResult`. It differs from a hypothetical "6-section" contract that includes a visible Route Change block: that block is internal only (§4.7), never public. Older stored JSON without `decisionStatus` is treated as `unresolved`.
+This is the real, shipped contract — 5 analysis sections plus Priority, Reply, an additive `decisionStatus`, and an optional resolved-only `decisionChallenge`. It differs from a hypothetical "6-section" contract that includes a visible Route Change block: that unresolved block is internal only (§4.7), never public. Older stored JSON without `decisionStatus` is treated as `unresolved`. Older stored JSON without `decisionChallenge` is valid and shows no challenge.
 
 Required limits:
 

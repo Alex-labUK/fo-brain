@@ -349,6 +349,11 @@ assert(page.includes("showDecisionSupport"), "Decision Support is gated for clos
 const supportIdx = page.indexOf("showDecisionSupport && supportState");
 assert(page.indexOf("Что определит решение") < supportIdx, "visual order: Determining Fact before Устойчивость решения");
 assert(supportIdx < page.indexOf("Следующий шаг"), "visual order: Устойчивость решения before Next Step");
+assert(page.includes("DecisionChallenge"), "Decision Challenge sits on the primary Decision surface");
+assert(page.includes("showDecisionChallenge"), "Decision Challenge is gated for closed and unresolved cases");
+const challengeIdx = page.indexOf("showDecisionChallenge && decisionChallenge");
+assert(supportIdx < challengeIdx, "visual order: Устойчивость решения before Проверка решения");
+assert(challengeIdx < page.indexOf("Следующий шаг"), "visual order: Проверка решения before Next Step");
 assert(!page.includes("confidenceScore"), "Decision Support is not a confidence score");
 assert(page.includes("shouldShowFactGatheringNextStep"), "B: fact-gathering is gated for resolved cases");
 assert(page.includes('executionPlacement === "primary"'), "C: pending execution can stay near next-step");

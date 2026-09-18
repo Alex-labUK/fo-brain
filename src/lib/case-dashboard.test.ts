@@ -321,8 +321,9 @@ assert(header.includes('href="/"'), "logo returns home");
 assert(header.includes('href="/analyze"'), "Новая ситуация is the analyze entry");
 
 const home = readFileSync(path.join(root, "src/app/page.tsx"), "utf8");
-assert(home.includes("Требуют решения"), "home heading is Требуют решения");
-assert(home.includes("Вопросы, которые требуют вашего внимания"), "home has the decision subtitle");
+assert(home.includes("ATTENTION_TITLE"), "home heading is Требует внимания");
+assert(home.includes("ATTENTION_SUBTITLE"), "home has the attention subtitle");
+assert(home.includes("DecisionInbox"), "home renders the Decision Inbox");
 assert(!home.includes("searchParams"), "home does not use ?view= expansion");
 assert(!home.includes("isSecondaryView"), "home does not read a view query");
 

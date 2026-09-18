@@ -11,6 +11,7 @@ import { CaseLifecyclePanel } from "@/app/cases/[id]/CaseLifecyclePanel";
 import { CaseLifecycleSuggestionCard } from "@/app/cases/[id]/CaseLifecycleSuggestionCard";
 import { CaseReopenSuggestionCard } from "@/app/cases/[id]/CaseReopenSuggestionCard";
 import { DecisionAuthorityCard } from "@/app/cases/[id]/DecisionAuthorityCard";
+import { PrincipalDecisionBriefCard } from "@/app/cases/[id]/PrincipalDecisionBriefCard";
 import { DecisionChallenge } from "@/app/cases/[id]/DecisionChallenge";
 import { DecisionSupport } from "@/app/cases/[id]/DecisionSupport";
 import { ReasoningContext } from "@/app/cases/[id]/ReasoningContext";
@@ -72,6 +73,10 @@ import { findRelevantPrinciples } from "@/lib/relevant-principles";
 import { shouldShowReasoningContext } from "@/lib/reasoning-context";
 import { shouldShowDecisionAuthority } from "@/lib/decision-authority";
 import { shouldShowDecisionChallenge } from "@/lib/decision-challenge";
+import {
+  derivePrincipalDecisionBrief,
+  shouldShowPrincipalDecisionBrief,
+} from "@/lib/principal-decision-brief";
 import { deriveDecisionSupportState, shouldShowDecisionSupport } from "@/lib/decision-support";
 
 export const dynamic = "force-dynamic";
@@ -212,6 +217,16 @@ export default async function CaseDetailPage({ params }: PageProps) {
       lifecycleState: caseItem.lifecycleState,
       authority: decisionAuthority,
     });
+  const principalBrief = derivePrincipalDecisionBrief({
+    analysis: storedAnalysis,
+    resolutionContext: caseItem.resolutionContext,
+  });
+  const showPrincipalBrief =
+    showPrimaryDecision &&
+    shouldShowPrincipalDecisionBrief({
+      lifecycleState: caseItem.lifecycleState,
+      brief: principalBrief,
+    });
   const nextStep = workspaceActionFirstNextStep(storedAnalysis);
   const showFactGathering = shouldShowFactGatheringNextStep(storedAnalysis) && showActiveNextStep;
   const executionPlacement = workspaceExecutionPlacement({
@@ -321,6 +336,7 @@ export default async function CaseDetailPage({ params }: PageProps) {
       ) : null}
       {showDecisionChallenge && decisionChallenge ? <DecisionChallenge challenge={decisionChallenge} /> : null}
       {showDecisionAuthority && decisionAuthority ? <DecisionAuthorityCard authority={decisionAuthority} /> : null}
+      {showPrincipalBrief && principalBrief ? <PrincipalDecisionBriefCard brief={principalBrief} /> : null}
       {priorityNote && <p className={`mt-3 ${workspaceType.muted}`}>{priorityNote}</p>}
     </section>
   ) : null;

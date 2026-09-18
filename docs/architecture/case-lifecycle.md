@@ -259,6 +259,14 @@ See `docs/architecture/decision-authority.md`.
 
 ---
 
+## Principal Decision Brief
+
+See `docs/architecture/principal-decision-brief.md`.
+
+**Решение для Principal** is a derived memo over the current analysis when `decisionAuthority.owner === "principal"`. Deterministic compression only. No extra AI call, no new recommendation, no approval workflow, no persisted brief. Hidden on a normally closed case.
+
+---
+
 ## Reopen / new decision cycle
 
 If a closed, resolved case later receives a genuine new uncertainty, the Decision Engine may set `decisionStatus` back to `unresolved`. Lifecycle stays `closed` until a human applies «возобновить кейс».

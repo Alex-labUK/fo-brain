@@ -80,6 +80,12 @@ export function CaseDecisionRecordCard({ record }: CaseDecisionRecordCardProps) 
           <p className={`mt-1 ${workspaceType.body}`}>{record.factualOutcome}</p>
         </div>
       ) : null}
+      {record.principalDecision ? (
+        <div className="mt-3">
+          <p className={workspaceType.kicker}>Решение Principal зафиксировано</p>
+          <p className={`mt-1 ${workspaceType.body}`}>{record.principalDecision.decision}</p>
+        </div>
+      ) : null}
       {closed ? (
         <p className={`mt-3 ${workspaceType.muted}`}>Закрыто {closed}</p>
       ) : null}

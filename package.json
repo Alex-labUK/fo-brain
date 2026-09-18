@@ -34,7 +34,8 @@
     "test:decision-challenge": "tsx src/lib/decision-challenge.test.ts",
     "test:decision-authority": "tsx src/lib/decision-authority.test.ts",
     "test:principal-brief": "tsx src/lib/principal-decision-brief.test.ts",
-    "test": "npm run test:analysis && npm run test:proposals && npm run test:execution && npm run test:reopen && npm run test:dashboard && npm run test:intake && npm run test:workspace && npm run test:change-summary && npm run test:next-step-result && npm run test:decision-record && npm run test:relevant-past && npm run test:reasoning-context && npm run test:precedent && npm run test:decision-support && npm run test:decision-challenge && npm run test:decision-authority && npm run test:principal-brief",
+    "test:principal-decision": "tsx src/lib/principal-decision.test.ts && tsx src/lib/principal-decision-durability.test.ts",
+    "test": "npm run test:analysis && npm run test:proposals && npm run test:execution && npm run test:reopen && npm run test:dashboard && npm run test:intake && npm run test:workspace && npm run test:change-summary && npm run test:next-step-result && npm run test:decision-record && npm run test:relevant-past && npm run test:reasoning-context && npm run test:precedent && npm run test:decision-support && npm run test:decision-challenge && npm run test:decision-authority && npm run test:principal-brief && npm run test:principal-decision",
     "postinstall": "prisma generate"
   },
   "prisma": {

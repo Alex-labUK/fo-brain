@@ -19,6 +19,7 @@ export type DecisionCycleRecord = {
   executionUpdatedAt: string | null;
   closedAt: string | null;
   decisionRecord?: unknown | null;
+  principalDecision?: unknown | null;
 };
 
 export type ReopenSuggestion = {
@@ -218,6 +219,9 @@ export function parseDecisionCycleHistory(raw: unknown): DecisionCycleRecord[] {
     if ("decisionRecord" in item) {
       cycle.decisionRecord = item.decisionRecord ?? null;
     }
+    if ("principalDecision" in item) {
+      cycle.principalDecision = item.principalDecision ?? null;
+    }
     cycles.push(cycle);
   }
   return cycles;
@@ -230,6 +234,7 @@ export function buildDecisionCycleRecord(input: {
   closedAt?: Date | string | null;
   archivedAt?: Date;
   decisionRecord?: unknown | null;
+  principalDecision?: unknown | null;
 }): DecisionCycleRecord {
   const archivedAt = (input.archivedAt ?? new Date()).toISOString();
   const toIso = (value?: Date | string | null): string | null => {
@@ -250,6 +255,9 @@ export function buildDecisionCycleRecord(input: {
   };
   if (input.decisionRecord != null) {
     record.decisionRecord = input.decisionRecord;
+  }
+  if (input.principalDecision != null) {
+    record.principalDecision = input.principalDecision;
   }
   return record;
 }

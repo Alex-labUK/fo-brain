@@ -147,6 +147,7 @@ model Case {
   reopenSuggestion     Json?
   resolutionContext    Json?
   decisionRecord       Json?
+  principalDecision    Json?
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 

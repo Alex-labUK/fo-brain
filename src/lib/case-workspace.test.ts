@@ -364,6 +364,9 @@ assert(page.includes("showPrincipalBrief"), "Principal Decision Brief is gated f
 const briefIdx = page.indexOf("showPrincipalBrief && principalBrief");
 assert(authorityIdx < briefIdx, "visual order: Кто принимает решение before Решение для Principal");
 assert(briefIdx < page.indexOf("Следующий шаг"), "visual order: Решение для Principal before Next Step");
+assert(page.includes("showPrincipalCapture"), "Principal capture is gated");
+assert(page.includes("showCapture={showPrincipalCapture}"), "Principal capture sits on the brief");
+assert(page.includes("showCapturedPrincipalDecision"), "captured Principal decision can sit in Дополнительно");
 assert(!page.includes("confidenceScore"), "Decision Support is not a confidence score");
 assert(page.includes("shouldShowFactGatheringNextStep"), "B: fact-gathering is gated for resolved cases");
 assert(page.includes('executionPlacement === "primary"'), "C: pending execution can stay near next-step");

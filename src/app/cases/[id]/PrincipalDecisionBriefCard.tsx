@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { CopyPrincipalBriefButton } from "@/app/cases/[id]/CopyPrincipalBriefButton";
+import { CapturePrincipalDecisionButton } from "@/app/cases/[id]/CapturePrincipalDecisionButton";
 import { workspaceType } from "@/app/cases/[id]/workspace-ui";
 import {
   PRINCIPAL_BRIEF_KICKER,
@@ -10,6 +11,8 @@ import {
 
 type PrincipalDecisionBriefCardProps = {
   brief: PrincipalDecisionBrief;
+  caseId?: string;
+  showCapture?: boolean;
 };
 
 function BriefSection({ label, children }: { label: string; children: ReactNode }) {
@@ -21,7 +24,7 @@ function BriefSection({ label, children }: { label: string; children: ReactNode 
   );
 }
 
-export function PrincipalDecisionBriefCard({ brief }: PrincipalDecisionBriefCardProps) {
+export function PrincipalDecisionBriefCard({ brief, caseId, showCapture }: PrincipalDecisionBriefCardProps) {
   const copyText = formatPrincipalDecisionBriefText(brief);
 
   return (
@@ -59,6 +62,13 @@ export function PrincipalDecisionBriefCard({ brief }: PrincipalDecisionBriefCard
         <BriefSection label={PRINCIPAL_BRIEF_LABELS.reconsiderIf}>{brief.reconsiderIf}</BriefSection>
       ) : null}
       <CopyPrincipalBriefButton text={copyText} />
+      {showCapture && caseId ? (
+        <CapturePrincipalDecisionButton
+          caseId={caseId}
+          question={brief.question}
+          currentRoute={brief.currentRoute}
+        />
+      ) : null}
     </div>
   );
 }

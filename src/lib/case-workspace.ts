@@ -499,6 +499,7 @@ export function previousCyclePreview(cycle: DecisionCycleRecord): {
   execution: string | null;
   closedAt: string | null;
   factualOutcome: string | null;
+  principalDecision: string | null;
 } {
   let resolution: string | null = null;
   if (cycle.analysis && typeof cycle.analysis === "object" && cycle.analysis !== null && "sections" in cycle.analysis) {
@@ -518,19 +519,36 @@ export function previousCyclePreview(cycle: DecisionCycleRecord): {
 
   const record =
     cycle.decisionRecord && typeof cycle.decisionRecord === "object"
-      ? (cycle.decisionRecord as { factualOutcome?: unknown; decision?: unknown })
+      ? (cycle.decisionRecord as {
+          factualOutcome?: unknown;
+          decision?: unknown;
+          principalDecision?: { decision?: unknown };
+        })
       : null;
   const factualOutcome =
     typeof record?.factualOutcome === "string" ? record.factualOutcome.trim() || null : null;
   if (!resolution && typeof record?.decision === "string") {
     resolution = record.decision.trim() || null;
   }
+  const fromRecord =
+    typeof record?.principalDecision?.decision === "string"
+      ? record.principalDecision.decision.trim() || null
+      : null;
+  const fromCycle =
+    cycle.principalDecision &&
+    typeof cycle.principalDecision === "object" &&
+    cycle.principalDecision !== null &&
+    "decision" in cycle.principalDecision &&
+    typeof (cycle.principalDecision as { decision?: unknown }).decision === "string"
+      ? (cycle.principalDecision as { decision: string }).decision.trim() || null
+      : null;
 
   return {
     resolution,
     execution: cycle.executionStep?.trim() || null,
     closedAt: cycle.closedAt,
     factualOutcome,
+    principalDecision: fromCycle || fromRecord,
   };
 }
 

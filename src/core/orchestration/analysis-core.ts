@@ -120,6 +120,14 @@ export type ContinueAnalysisInput = {
   /** Optional archived cycles; only the most recent completed cycle is sent to the model. */
   decisionCycleHistory?: unknown;
   historicalPrecedents?: HistoricalPrecedentRecord[];
+  /** Structured current-cycle Principal capture. Not inferred from message prefixes. */
+  currentPrincipalDecision?: {
+    decision: string;
+    question: string;
+    decidedAt: string;
+    analysisKey: string;
+    cycleNumber?: number;
+  };
 };
 
 export const MAX_CASE_MEMORY_BULLETS = 15;

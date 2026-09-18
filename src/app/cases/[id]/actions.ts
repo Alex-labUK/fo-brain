@@ -23,6 +23,7 @@ import {
   reopenLifecycleUpdate,
 } from "@/lib/decision-cycle";
 import { archiveActiveDecisionRecord, lifecycleCloseWrite, shouldFinalizeDecisionRecord } from "@/lib/decision-record";
+import { parsePrincipalDecision } from "@/lib/principal-decision";
 import { prisma } from "@/lib/prisma";
 
 function revalidateCasePaths(id: string): void {
@@ -107,6 +108,7 @@ export async function updateCaseLifecycle(
       executionOwner: true,
       executionStatus: true,
       executionUpdatedAt: true,
+      principalDecision: true,
       outcome: { select: { statement: true } },
     },
   });
@@ -147,6 +149,7 @@ export async function updateCaseLifecycle(
     decisionRecord?: Prisma.InputJsonValue | typeof Prisma.DbNull;
     decisionCycleHistory?: Prisma.InputJsonValue;
     caseMemory?: string;
+    principalDecision?: Prisma.InputJsonValue | typeof Prisma.DbNull;
   } = {
     lifecycleState: next.lifecycleState,
     blockerType: next.blockerType,
@@ -194,9 +197,11 @@ export async function updateCaseLifecycle(
         execution: storedExecution,
         caseMemory: caseItem.caseMemory,
         factualOutcome: input.factualOutcome,
+        principalDecision: parsePrincipalDecision(caseItem.principalDecision),
       });
       data.decisionRecord = write.decisionRecord as Prisma.InputJsonValue;
       data.caseMemory = write.caseMemory;
+      data.principalDecision = Prisma.DbNull;
     }
   }
 
@@ -208,6 +213,7 @@ export async function updateCaseLifecycle(
       execution: storedExecution,
       executionUpdatedAt: caseItem.executionUpdatedAt,
       closedAt: caseItem.lifecycleUpdatedAt,
+      principalDecision: caseItem.principalDecision,
     });
     if (detached.history) {
       data.decisionCycleHistory = detached.history as Prisma.InputJsonValue;
@@ -215,6 +221,7 @@ export async function updateCaseLifecycle(
     if (detached.clearActive) {
       data.decisionRecord = Prisma.DbNull;
     }
+    data.principalDecision = Prisma.DbNull;
   }
 
   await prisma.case.update({
@@ -431,6 +438,7 @@ export async function applyReopenSuggestion(id: string): Promise<void> {
       executionUpdatedAt: new Date(),
       reopenSuggestion: { ...stored, dismissed: true },
       decisionRecord: Prisma.DbNull,
+      principalDecision: Prisma.DbNull,
     },
   });
   revalidateCasePaths(id);

@@ -22,6 +22,10 @@ import {
   deriveDecisionChangeTransitionKey,
   type DecisionChangeSummaryPayload,
 } from "@/lib/decision-change-summary";
+import {
+  parsePrincipalDecision,
+  rememberPrincipalDecision,
+} from "@/lib/principal-decision";
 import { prisma } from "@/lib/prisma";
 
 const AI_UNAVAILABLE_REPLY =
@@ -37,14 +41,25 @@ function buildRecordedResultFromAnalysis(sections: { title: string; content?: st
   return [outcome, fork].filter(Boolean).join(" ");
 }
 
-export async function postCaseMessage(
+export type ContinueCaseAnalysisInput = {
+  newMessage: string;
+  createUserMessage?: boolean;
+};
+
+export type ContinueCaseAnalysisResult = {
+  status: "updated" | "ai_unavailable";
+  changeSummary: DecisionChangeSummaryPayload | null;
+};
+
+export async function continueCaseAnalysis(
   caseId: string,
-  text: string,
-): Promise<DecisionChangeSummaryPayload | null> {
-  const trimmed = text.trim();
+  input: ContinueCaseAnalysisInput,
+): Promise<ContinueCaseAnalysisResult> {
+  const trimmed = input.newMessage.trim();
   if (!trimmed) {
     throw new Error("Сообщение не может быть пустым");
   }
+  const createUserMessage = input.createUserMessage !== false;
 
   const caseItem = await prisma.case.findUnique({
     where: { id: caseId },
@@ -67,6 +82,7 @@ export async function postCaseMessage(
       reopenSuggestion: true,
       resolutionContext: true,
       decisionRecord: true,
+      principalDecision: true,
       priorityUrgency: true,
       priorityStake: true,
       priorityNote: true,
@@ -84,15 +100,18 @@ export async function postCaseMessage(
   const currentFork = currentSections.find((section) => section.title === SECTION_TITLES[1])?.content;
   const currentDeterminingFact = currentSections.find((section) => section.title === SECTION_TITLES[2])?.content;
   const currentDecisionStatus = parseDecisionStatus(caseItem.analysisResult);
+  const storedPrincipalDecision = parsePrincipalDecision(caseItem.principalDecision);
 
-  await prisma.caseMessage.create({
-    data: {
-      id: generateMessageId(),
-      caseId,
-      role: "user",
-      content: trimmed,
-    },
-  });
+  if (createUserMessage) {
+    await prisma.caseMessage.create({
+      data: {
+        id: generateMessageId(),
+        caseId,
+        role: "user",
+        content: trimmed,
+      },
+    });
+  }
 
   const priorMessages = await prisma.caseMessage.findMany({
     where: { caseId },
@@ -100,7 +119,11 @@ export async function postCaseMessage(
     select: { role: true, content: true },
   });
 
-  const history: ConversationTurn[] = priorMessages.slice(0, -1).map((message) => ({
+  const historySource = createUserMessage
+    ? priorMessages.slice(0, -1)
+    : splitHistoryAroundMessage(priorMessages, trimmed);
+
+  const history: ConversationTurn[] = historySource.map((message) => ({
     role: message.role as ConversationTurn["role"],
     content: message.content,
   }));
@@ -117,6 +140,7 @@ export async function postCaseMessage(
     caseId,
     title: caseItem.title,
     decisionCycleHistory: caseItem.decisionCycleHistory,
+    currentPrincipalDecision: storedPrincipalDecision ?? undefined,
   });
 
   if (run.source === "ai") {
@@ -126,7 +150,9 @@ export async function postCaseMessage(
       run.result.sections.find((section) => section.title === SECTION_TITLES[0])?.content?.trim() ||
       "Разбор обновлён.";
 
-    const persistedCaseMemory = run.updatedCaseMemory?.trim() || caseItem.caseMemory;
+    const persistedCaseMemory = storedPrincipalDecision
+      ? rememberPrincipalDecision(run.updatedCaseMemory?.trim() || caseItem.caseMemory, storedPrincipalDecision.decision)
+      : run.updatedCaseMemory?.trim() || caseItem.caseMemory;
     const nextDecisionStatus = parseDecisionStatus(run.result);
     const dialogue: ConversationTurn[] = priorMessages.map((message) => ({
       role: message.role as ConversationTurn["role"],
@@ -166,6 +192,7 @@ export async function postCaseMessage(
             executionUpdatedAt: caseItem.executionUpdatedAt,
             closedAt: caseItem.lifecycleState === "closed" ? caseItem.lifecycleUpdatedAt : null,
             decisionRecord: parseDecisionRecord(caseItem.decisionRecord),
+            principalDecision: storedPrincipalDecision,
           }),
         )
       : null;
@@ -215,6 +242,7 @@ export async function postCaseMessage(
       reopenSuggestion: Prisma.InputJsonValue | typeof Prisma.DbNull;
       resolutionContext?: Prisma.InputJsonValue | typeof Prisma.DbNull;
       decisionRecord?: Prisma.InputJsonValue | typeof Prisma.DbNull;
+      principalDecision?: Prisma.InputJsonValue | typeof Prisma.DbNull;
       priorityUrgency?: string | null;
       priorityStake?: string | null;
       priorityNote?: string | null;
@@ -233,6 +261,7 @@ export async function postCaseMessage(
       caseUpdate.decisionCycleHistory = archivedHistory as Prisma.InputJsonValue;
       caseUpdate.decisionRecord = Prisma.DbNull;
       caseUpdate.resolutionContext = Prisma.DbNull;
+      caseUpdate.principalDecision = Prisma.DbNull;
     }
 
     if (run.result.priority) {
@@ -260,16 +289,19 @@ export async function postCaseMessage(
     revalidatePath("/cases");
     revalidatePath(`/cases/${caseId}`);
 
-    if (!changeSummary) {
-      return null;
-    }
-
     return {
-      transitionKey:
-        deriveDecisionChangeTransitionKey(caseItem.analysisResult, run.result) ?? assistantMessageId,
-      summary: changeSummary,
+      status: "updated",
+      changeSummary: changeSummary
+        ? {
+            transitionKey:
+              deriveDecisionChangeTransitionKey(caseItem.analysisResult, run.result) ?? assistantMessageId,
+            summary: changeSummary,
+          }
+        : null,
     };
-  } else {
+  }
+
+  if (createUserMessage) {
     await prisma.caseMessage.create({
       data: {
         id: generateMessageId(),
@@ -283,5 +315,28 @@ export async function postCaseMessage(
   revalidatePath("/");
   revalidatePath("/cases");
   revalidatePath(`/cases/${caseId}`);
-  return null;
+  return { status: "ai_unavailable", changeSummary: null };
+}
+
+function splitHistoryAroundMessage(
+  messages: { role: string; content: string }[],
+  newMessage: string,
+): { role: string; content: string }[] {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index]?.role === "user" && messages[index]?.content === newMessage) {
+      return messages.slice(0, index);
+    }
+  }
+  return messages;
+}
+
+export async function postCaseMessage(
+  caseId: string,
+  text: string,
+): Promise<DecisionChangeSummaryPayload | null> {
+  const result = await continueCaseAnalysis(caseId, {
+    newMessage: text,
+    createUserMessage: true,
+  });
+  return result.status === "updated" ? result.changeSummary : null;
 }

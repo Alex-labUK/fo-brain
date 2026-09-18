@@ -20,6 +20,12 @@ import {
   type DecisionCycleRecord,
 } from "@/lib/decision-cycle";
 import { nextStepResultEvidence } from "@/lib/next-step-result-flow";
+import {
+  parseHistoricalPrincipalDecision,
+  toHistoricalPrincipalDecision,
+  type HistoricalPrincipalDecision,
+  type PrincipalDecisionRecord,
+} from "@/lib/principal-decision";
 
 export const DECISION_RECORD_VERSION = 1;
 export const MAX_FACTUAL_OUTCOME_LENGTH = 800;
@@ -46,6 +52,11 @@ export type DecisionRecord = {
   executionOwner?: string;
   executionStatus?: ExecutionStatus;
   factualOutcome?: string;
+  principalDecision?: {
+    decision: string;
+    question: string;
+    decidedAt: string;
+  };
 };
 
 export type ClosurePreview = {
@@ -142,6 +153,8 @@ export function parseDecisionRecord(raw: unknown): DecisionRecord | null {
   if (isExecutionStatus(raw.executionStatus)) record.executionStatus = raw.executionStatus;
   const factualOutcome = sanitizeFactualOutcome(raw.factualOutcome);
   if (factualOutcome) record.factualOutcome = factualOutcome;
+  const principalDecision = parseHistoricalPrincipalDecision(raw.principalDecision);
+  if (principalDecision) record.principalDecision = principalDecision;
 
   return record;
 }
@@ -213,6 +226,7 @@ export function buildDecisionRecord(input: {
   resolutionContext?: unknown;
   execution: StoredExecution;
   factualOutcome?: string | null;
+  principalDecision?: PrincipalDecisionRecord | HistoricalPrincipalDecision | null;
 }): DecisionRecord {
   const closedAt =
     input.closedAt instanceof Date
@@ -256,6 +270,8 @@ export function buildDecisionRecord(input: {
 
   const factualOutcome = sanitizeFactualOutcome(input.factualOutcome);
   if (factualOutcome) record.factualOutcome = factualOutcome;
+  const principalDecision = toHistoricalPrincipalDecision(input.principalDecision);
+  if (principalDecision) record.principalDecision = principalDecision;
 
   return record;
 }
@@ -364,6 +380,7 @@ export function archiveActiveDecisionRecord(input: {
   executionUpdatedAt?: Date | string | null;
   closedAt?: Date | string | null;
   archivedAt?: Date;
+  principalDecision?: unknown | null;
 }): { history: DecisionCycleRecord[] | null; clearActive: boolean } {
   const record = parseDecisionRecord(input.decisionRecord);
   if (!record) {
@@ -382,6 +399,7 @@ export function archiveActiveDecisionRecord(input: {
       closedAt: input.closedAt ?? record.closedAt,
       archivedAt: input.archivedAt,
       decisionRecord: record,
+      principalDecision: input.principalDecision ?? record.principalDecision ?? null,
     }),
   );
   return { history: nextHistory, clearActive: true };
@@ -413,6 +431,7 @@ export function lifecycleCloseWrite(input: {
   execution: StoredExecution;
   caseMemory: string;
   factualOutcome?: string | null;
+  principalDecision?: PrincipalDecisionRecord | HistoricalPrincipalDecision | null;
 }): LifecycleCloseWrite {
   const factualOutcome = sanitizeFactualOutcome(input.factualOutcome);
   return {
@@ -424,6 +443,7 @@ export function lifecycleCloseWrite(input: {
       resolutionContext: input.resolutionContext,
       execution: input.execution,
       factualOutcome,
+      principalDecision: input.principalDecision,
     }),
     caseMemory: appendClosureFactToCaseMemory(input.caseMemory, factualOutcome),
   };

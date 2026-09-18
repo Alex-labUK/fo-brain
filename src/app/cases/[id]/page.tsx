@@ -12,6 +12,7 @@ import { CaseLifecycleSuggestionCard } from "@/app/cases/[id]/CaseLifecycleSugge
 import { CaseReopenSuggestionCard } from "@/app/cases/[id]/CaseReopenSuggestionCard";
 import { DecisionAuthorityCard } from "@/app/cases/[id]/DecisionAuthorityCard";
 import { PrincipalDecisionBriefCard } from "@/app/cases/[id]/PrincipalDecisionBriefCard";
+import { CapturedPrincipalDecisionNote } from "@/app/cases/[id]/CapturedPrincipalDecisionNote";
 import { DecisionChallenge } from "@/app/cases/[id]/DecisionChallenge";
 import { DecisionSupport } from "@/app/cases/[id]/DecisionSupport";
 import { ReasoningContext } from "@/app/cases/[id]/ReasoningContext";
@@ -77,6 +78,12 @@ import {
   derivePrincipalDecisionBrief,
   shouldShowPrincipalDecisionBrief,
 } from "@/lib/principal-decision-brief";
+import {
+  parsePrincipalDecision,
+  shouldRetryPrincipalAnalysis,
+  shouldShowCapturedPrincipalDecision,
+  shouldShowPrincipalDecisionCapture,
+} from "@/lib/principal-decision";
 import { deriveDecisionSupportState, shouldShowDecisionSupport } from "@/lib/decision-support";
 
 export const dynamic = "force-dynamic";
@@ -227,6 +234,28 @@ export default async function CaseDetailPage({ params }: PageProps) {
       lifecycleState: caseItem.lifecycleState,
       brief: principalBrief,
     });
+  const storedPrincipalDecision = parsePrincipalDecision(caseItem.principalDecision);
+  const showPrincipalCapture = shouldShowPrincipalDecisionCapture({
+    lifecycleState: caseItem.lifecycleState,
+    authority: decisionAuthority,
+    brief: principalBrief,
+    stored: storedPrincipalDecision,
+    analysis: storedAnalysis,
+  });
+  const showCapturedPrincipalDecision = shouldShowCapturedPrincipalDecision({
+    lifecycleState: caseItem.lifecycleState,
+    briefVisible: showPrincipalBrief,
+    stored: storedPrincipalDecision,
+    analysis: storedAnalysis,
+  });
+  const showRetryPrincipalAnalysis = Boolean(
+    showPrincipalBrief &&
+      shouldRetryPrincipalAnalysis({
+        lifecycleState: caseItem.lifecycleState,
+        stored: storedPrincipalDecision,
+        analysis: storedAnalysis,
+      }),
+  );
   const nextStep = workspaceActionFirstNextStep(storedAnalysis);
   const showFactGathering = shouldShowFactGatheringNextStep(storedAnalysis) && showActiveNextStep;
   const executionPlacement = workspaceExecutionPlacement({
@@ -336,7 +365,24 @@ export default async function CaseDetailPage({ params }: PageProps) {
       ) : null}
       {showDecisionChallenge && decisionChallenge ? <DecisionChallenge challenge={decisionChallenge} /> : null}
       {showDecisionAuthority && decisionAuthority ? <DecisionAuthorityCard authority={decisionAuthority} /> : null}
-      {showPrincipalBrief && principalBrief ? <PrincipalDecisionBriefCard brief={principalBrief} /> : null}
+      {showPrincipalBrief && principalBrief ? (
+        <>
+          <PrincipalDecisionBriefCard
+            brief={principalBrief}
+            caseId={caseItem.id}
+            showCapture={showPrincipalCapture}
+          />
+          {showRetryPrincipalAnalysis && storedPrincipalDecision ? (
+            <div className="mt-3">
+              <CapturedPrincipalDecisionNote
+                record={storedPrincipalDecision}
+                caseId={caseItem.id}
+                showRetry
+              />
+            </div>
+          ) : null}
+        </>
+      ) : null}
       {priorityNote && <p className={`mt-3 ${workspaceType.muted}`}>{priorityNote}</p>}
     </section>
   ) : null;
@@ -498,6 +544,11 @@ export default async function CaseDetailPage({ params }: PageProps) {
               {decisionSurface}
             </WorkspaceDetails>
           )}
+          {showCapturedPrincipalDecision && storedPrincipalDecision && !showRetryPrincipalAnalysis ? (
+            <WorkspaceDetails title="Решение Principal зафиксировано">
+              <CapturedPrincipalDecisionNote record={storedPrincipalDecision} />
+            </WorkspaceDetails>
+          ) : null}
           {previousCycles.length > 0 && (
             <WorkspaceDetails title="История решений" hint={previousCyclesLabel(previousCycles.length)}>
               <ol className="space-y-4">
@@ -510,9 +561,14 @@ export default async function CaseDetailPage({ params }: PageProps) {
                       {preview.execution && (
                         <p className={`mt-1 ${workspaceType.muted}`}>{preview.execution}</p>
                       )}
-                      {preview.factualOutcome && (
-                        <p className={`mt-1 ${workspaceType.muted}`}>{preview.factualOutcome}</p>
-                      )}
+          {preview.factualOutcome && (
+            <p className={`mt-1 ${workspaceType.muted}`}>{preview.factualOutcome}</p>
+          )}
+          {preview.principalDecision && (
+            <p className={`mt-1 ${workspaceType.muted}`}>
+              Решение Principal зафиксировано: {preview.principalDecision}
+            </p>
+          )}
                       {closed && <p className={`mt-1 ${workspaceType.muted}`}>Закрыт {closed}</p>}
                     </li>
                   );

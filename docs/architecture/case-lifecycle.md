@@ -267,6 +267,14 @@ See `docs/architecture/principal-decision-brief.md`.
 
 ---
 
+## Principal Decision Capture
+
+See `docs/architecture/principal-decision-capture.md`.
+
+**Зафиксировать решение Principal** records a human Principal judgment into current-cycle structured state, caseMemory, and dialogue, then reruns the existing analysis once. It does not write lifecycle, execution, or closure. The same Principal question should not be re-asked. A later different judgment may.
+
+---
+
 ## Reopen / new decision cycle
 
 If a closed, resolved case later receives a genuine new uncertainty, the Decision Engine may set `decisionStatus` back to `unresolved`. Lifecycle stays `closed` until a human applies «возобновить кейс».
